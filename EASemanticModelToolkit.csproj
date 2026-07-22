@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableComHosting>true</EnableComHosting>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <PlatformTarget>x64</PlatformTarget>
+    <Platforms>x64</Platforms>
+    <Version>1.0.0</Version>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Addin.cs" />
+    <Compile Include="components\importer\*.cs"
+             Exclude="components\importer\Addin.cs;components\importer\AssemblyInfo.cs" />
+    <Compile Include="components\exporter\*.cs"
+             Exclude="components\exporter\Addin.cs;components\exporter\AssemblyInfo.cs" />
+    <Reference Include="Interop.EA">
+      <HintPath>components\importer\lib\Interop.EA.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
+
