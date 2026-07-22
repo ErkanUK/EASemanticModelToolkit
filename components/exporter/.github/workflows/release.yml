@@ -1,0 +1,44 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Verify EA DLL
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse lib
+          Get-Item lib\Interop.EA.dll | Format-List Name,Length
+
+      - name: Restore
+        run: dotnet restore EA17LinkMLExporter.csproj
+
+      - name: Build
+        run: dotnet build EA17LinkMLExporter.csproj --configuration Release --no-restore
+
+      - name: Test exporters
+        run: dotnet run --project tests/EA17LinkMLExporter.Tests.csproj --configuration Release
+
+      - name: Publish
+        run: dotnet publish EA17LinkMLExporter.csproj --configuration Release --runtime win-x64 --self-contained false --output publish
+
+      - name: Create ZIP
+        shell: pwsh
+        run: Compress-Archive -Path publish\* -DestinationPath EA17LinkMLExporter.zip
