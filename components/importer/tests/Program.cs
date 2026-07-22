@@ -20,8 +20,17 @@ if (args.Length == 1)
     Console.WriteLine($"Layout annotations: {annotated.Count}/{inspected.Classes.Count} classes annotated.");
     foreach (var domain in annotated.SelectMany(x => x.DiagramDomains).Distinct(StringComparer.OrdinalIgnoreCase))
     {
-        Console.WriteLine($"  {domain}: {annotated.Count(x => x.DiagramDomains.Contains(domain, StringComparer.OrdinalIgnoreCase))} classes");
+        var domainClasses = annotated.Where(x => x.DiagramDomains.Contains(domain, StringComparer.OrdinalIgnoreCase))
+            .Select(x => x.Name).ToList();
+        var domainLayout = SmartDiagramLayout.Arrange(inspected, domainClasses, false);
+        if (domainLayout.Count != domainClasses.Count)
+            throw new InvalidOperationException($"Domain layout '{domain}' omitted classes.");
+        Console.WriteLine($"  {domain}: {domainClasses.Count} classes");
     }
+    var enumerationLayout = SmartDiagramLayout.Arrange(inspected, [], true);
+    if (enumerationLayout.Count != inspected.Enums.Count)
+        throw new InvalidOperationException("Enumeration layout omitted enumerations.");
+    Console.WriteLine($"Enumeration diagram: {enumerationLayout.Count} enumerations.");
     return;
 }
 
@@ -263,6 +272,8 @@ Assert(smartLayout["Status"].Left > layoutModel.Classes.Max(x => smartLayout[x.N
 Assert(!smartLayout.SelectMany((left, index) => smartLayout.Skip(index + 1).Select(right => Overlaps(left.Value, right.Value))).Any(x => x), "layout boxes do not overlap");
 var repeatedLayout = SmartDiagramLayout.Arrange(layoutModel);
 Assert(smartLayout.All(x => repeatedLayout[x.Key] == x.Value), "layout is deterministic");
+var subsetLayout = SmartDiagramLayout.Arrange(layoutModel, ["First"], false);
+Assert(subsetLayout.Keys.SequenceEqual(["First"]), "subset layout ignores relationships from excluded classes");
 
 var ontologyModel = new ImportModel
 {

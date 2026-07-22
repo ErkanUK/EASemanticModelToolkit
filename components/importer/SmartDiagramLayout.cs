@@ -22,7 +22,7 @@ internal static class SmartDiagramLayout
         var neighbours = classNames.ToDictionary(x => x, _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
         var outgoing = classNames.ToDictionary(x => x, _ => 0, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var cls in model.Classes)
+        foreach (var cls in model.Classes.Where(x => classNames.Contains(x.Name)))
         {
             foreach (var property in cls.Properties.Where(x => x.IsReference && classNames.Contains(x.Type)))
             {
