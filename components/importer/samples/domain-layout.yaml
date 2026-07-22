@@ -1,0 +1,56 @@
+id: https://example.org/domain-layout
+name: domain_layout_example
+title: Domain Layout Example
+version: 1.0.0
+
+annotations:
+  ea_domain_colors:
+    network_spine: "#DDEBF7"
+    load_planning: "#E2EFDA"
+    asset_health: "#FFF2CC"
+    source_lineage: "#EAD1DC"
+
+classes:
+  Substation:
+    annotations:
+      ea_domains: "network_spine,source_lineage"
+      ea_order: 10
+    relationships:
+      transformers:
+        range: Transformer
+        multivalued: true
+
+  Transformer:
+    annotations:
+      ea_domains: "network_spine,load_planning,asset_health"
+      ea_order: 20
+    relationships:
+      feeders:
+        range: LVFeeder
+        multivalued: true
+      asset:
+        range: Asset
+
+  LVFeeder:
+    annotations:
+      ea_domains: "network_spine,load_planning"
+      ea_order: 30
+    relationships:
+      usage_points:
+        range: UsagePoint
+        multivalued: true
+
+  UsagePoint:
+    annotations:
+      ea_domains: "network_spine,load_planning"
+      ea_order: 40
+
+  Asset:
+    annotations:
+      ea_domains: asset_health
+      ea_order: 10
+
+  SourceRecord:
+    annotations:
+      ea_domains: source_lineage
+      ea_order: 20

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Library",
+  "version": "1.0",
+  "$defs": {
+    "Person": {
+      "type": "object",
+      "properties": { "name": { "type": "string" } },
+      "required": ["name"]
+    },
+    "Book": {
+      "type": "object",
+      "properties": {
+        "isbn": { "type": "string" },
+        "author": { "$ref": "#/$defs/Person" },
+        "status": { "type": "string", "enum": ["available", "loaned"] }
+      },
+      "required": ["isbn", "author"]
+    }
+  },
+  "type": "object",
+  "properties": {
+    "books": { "type": "array", "items": { "$ref": "#/$defs/Book" } }
+  }
+}

@@ -1,0 +1,17 @@
+title: Product Catalogue
+type: object
+required:
+  - products
+properties:
+  products:
+    type: array
+    items:
+      type: object
+      title: Product
+      properties:
+        code:
+          type: string
+        price:
+          type: number
+        active:
+          type: boolean

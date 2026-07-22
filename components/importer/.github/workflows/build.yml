@@ -1,0 +1,34 @@
+name: Build importer
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Restore
+        run: dotnet restore EAJsonModelImporter.csproj
+      - name: Build
+        run: dotnet build EAJsonModelImporter.csproj -c Release --no-restore
+      - name: Test converters
+        run: dotnet run --project tests/EAJsonModelImporter.Tests.csproj -c Release
+      - name: Publish
+        run: dotnet publish EAJsonModelImporter.csproj -c Release --no-restore -o package/prebuilt
+      - name: Add installer and documentation
+        shell: pwsh
+        run: Copy-Item install.ps1,README.md -Destination package; Copy-Item samples -Destination package -Recurse
+      - name: Create test package
+        shell: pwsh
+        run: Compress-Archive -Path package/* -DestinationPath EAJsonModelImporter-test-build.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EAJsonModelImporter-test-build
+          path: EAJsonModelImporter-test-build.zip
