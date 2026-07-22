@@ -18,6 +18,7 @@ internal sealed class ImportClass
     public List<string> Parents { get; } = [];
     public List<ImportProperty> Properties { get; } = [];
     public List<string> DiagramDomains { get; } = [];
+    public string DiagramColor { get; set; } = "";
     public int DiagramOrder { get; set; } = int.MaxValue;
 }
 

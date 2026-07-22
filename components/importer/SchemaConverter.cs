@@ -228,7 +228,7 @@ internal sealed class SchemaConverter
     private static void ParseDiagramAnnotations(ImportClass cls, JsonObject? annotations)
     {
         if (annotations is null) return;
-        if (annotations["ea_domains"] is { } domainsNode)
+        if ((annotations["ea_domains"] ?? annotations["domain"]) is { } domainsNode)
         {
             IEnumerable<string> domains = domainsNode switch
             {
@@ -241,6 +241,11 @@ internal sealed class SchemaConverter
                 if (!cls.DiagramDomains.Contains(domain, StringComparer.OrdinalIgnoreCase))
                     cls.DiagramDomains.Add(domain);
         }
+
+        JsonNode? colorNode = annotations["sparx_colour"] ?? annotations["sparx_color"]
+            ?? annotations["ea_colour"] ?? annotations["ea_color"];
+        if (colorNode is JsonObject colorObject) colorNode = colorObject["value"];
+        if (colorNode is not null) cls.DiagramColor = colorNode.ToString().Trim().Trim('"', '\'');
 
         JsonNode? orderNode = annotations["ea_order"];
         if (orderNode is JsonObject orderObject) orderNode = orderObject["value"];

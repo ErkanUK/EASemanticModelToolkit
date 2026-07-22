@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows.Forms;
 
 namespace EASemanticModelToolkit;
@@ -82,27 +81,8 @@ public sealed class Addin
                 model.Classes.Count, model.Enums.Count, diagramSummary);
             if (options.ShowDialog() != DialogResult.OK) return;
 
-            var exported = new List<string>();
-            string directory = Path.GetDirectoryName(dialog.FileName) ?? Environment.CurrentDirectory;
-            string baseName = Path.GetFileNameWithoutExtension(dialog.FileName);
-            if (options.ExportOwl)
-            {
-                string path = Path.Combine(directory, baseName + ".owl");
-                File.WriteAllText(path, EAJsonModelImporter.OwlSerializer.Serialize(model,
-                    EAJsonModelImporter.OwlSerialization.RdfXml), new UTF8Encoding(false));
-                exported.Add(path);
-            }
-            if (options.ExportTurtle)
-            {
-                string path = Path.Combine(directory, baseName + ".ttl");
-                File.WriteAllText(path, EAJsonModelImporter.OwlSerializer.Serialize(model,
-                    EAJsonModelImporter.OwlSerialization.Turtle), new UTF8Encoding(false));
-                exported.Add(path);
-            }
-
             var package = EAJsonModelImporter.EaModelWriter.Write(repository, target, model);
-            string exportSummary = exported.Count == 0 ? "" : "\n\nOntology files:\n" + string.Join("\n", exported);
-            MessageBox.Show($"Import complete.\nCreated package: {package.Name}{exportSummary}", ProductName,
+            MessageBox.Show($"Import complete.\nCreated package: {package.Name}", ProductName,
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
@@ -152,4 +132,3 @@ public sealed class Addin
         catch { return null; }
     }
 }
-

@@ -1,6 +1,6 @@
 # EA JSON/YAML Model Importer
 
-Sparx Enterprise Architect JSON/YAML Model Importer is a 64-bit add-in for Sparx Enterprise Architect 17. It converts JSON data, JSON Schema, YAML data, and YAML-based JSON Schema into an editable UML class model, with optional OWL ontology exports for Protégé and other semantic-web tools.
+Sparx Enterprise Architect JSON/YAML Model Importer is a 64-bit add-in for Sparx Enterprise Architect 17. It converts JSON data, JSON Schema, YAML data, and YAML-based JSON Schema into an editable UML class model.
 
 The importer creates native EA packages, classes, attributes, enumerations, associations, generalizations, multiplicities, notes, and a class diagram. The result can be edited using normal Enterprise Architect modelling tools.
 
@@ -36,21 +36,11 @@ The installer registers the add-in for the current Windows user under EA's 64-bi
 4. Choose **Import into selected package…**.
 5. Select a `.json`, `.schema.json`, `.yaml`, or `.yml` file.
 6. Review the preview showing the number of classes and enumerations.
-7. Optionally select **Export OWL (.owl, RDF/XML)** and/or **Export OWL Turtle (.ttl)**.
-8. Select **Import** to create the model.
+7. Select **Import** to create the model.
 
 The importer creates a new child package and a class diagram. It never overwrites an existing package. If the generated package name already exists, a numeric suffix is added.
 
 Generated diagrams use a deterministic, relationship-aware layout. Connected classes are arranged in graph layers, disconnected components are grouped, box sizes reflect their contents, and enumerations are placed separately. The algorithm uses model topology only and has no domain-specific class-name rules.
-
-## Optional OWL ontology exports
-
-The import confirmation contains two unchecked export options. Selected ontology files are written beside the source JSON or YAML file, using the same base filename. Existing files with those names are replaced.
-
-- `.owl` uses RDF/XML.
-- `.ttl` uses Turtle.
-
-Both serializations describe the same OWL ontology. UML classes become `owl:Class` resources, primitive attributes become datatype properties, associations become object properties, generalizations become `rdfs:subClassOf` axioms, multiplicities become cardinality restrictions, and enumerations become OWL classes containing named individuals. Descriptions, model versions, and EA identifier attributes are preserved as ontology annotations.
 
 ## Mappings
 

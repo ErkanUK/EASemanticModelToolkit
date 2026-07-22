@@ -205,6 +205,17 @@ Assert(diagramAsset.DiagramDomains.SequenceEqual(["asset_health"]), "array EA di
 Assert(diagramAsset.DiagramOrder == 10, "second EA diagram order");
 Assert(diagramModel.DiagramDomainColors["network_spine"] == "#DDEBF7", "EA domain colour annotation");
 Assert(diagramModel.DiagramDomainColors["asset_health"] == "#FFF2CC", "second EA domain colour annotation");
+var sparxAnnotations = SimpleYaml.Parse("""
+classes:
+  Substation:
+    annotations:
+      domain: Network
+      sparx_colour: "#C8E6C9"
+""");
+var sparxModel = new SchemaConverter().Convert(sparxAnnotations, "sparx-annotations");
+var sparxSubstation = sparxModel.Classes.Single(x => x.Name == "Substation");
+Assert(sparxSubstation.DiagramDomains.SequenceEqual(["Network"]), "Sparx domain annotation");
+Assert(sparxSubstation.DiagramColor == "#C8E6C9", "Sparx class colour annotation");
 Assert(EaModelWriter.ParseEaColor("#FF0000") == 255, "EA red colour encoding");
 Assert(EaModelWriter.ParseEaColor("#00FF00") == 65280, "EA green colour encoding");
 Assert(EaModelWriter.ParseEaColor("#0000FF") == 16711680, "EA blue colour encoding");

@@ -84,7 +84,7 @@ internal static class EaModelWriter
         {
             CreateSmartDiagram(repository, package, model.Name + " Class Model",
                 "Generated from JSON, JSON Schema, or YAML using relationship-aware smart layout.",
-                model, elements, null, true, _ => 0);
+                model, elements, null, true, name => ExplicitClassColor(model, name));
             return;
         }
 
@@ -97,7 +97,7 @@ internal static class EaModelWriter
             {
                 var definition = model.Classes.First(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
                 string domain = PrimaryDomain(definition);
-                return DomainColor(model, domain, domainIndexes[domain]);
+                return ClassColor(definition, model, domain, domainIndexes[domain]);
             });
         for (int domainIndex = 0; domainIndex < domains.Count; domainIndex++)
         {
@@ -105,10 +105,13 @@ internal static class EaModelWriter
             var classNames = model.Classes
                 .Where(x => EffectiveDomains(x).Contains(domain, StringComparer.OrdinalIgnoreCase))
                 .OrderBy(x => x.DiagramOrder).ThenBy(x => x.Name).Select(x => x.Name).ToList();
-            int color = DomainColor(model, domain, domainIndex);
             CreateSmartDiagram(repository, package, model.Name + " - " + DisplayDomain(domain),
                 "Generated from ea_domains LinkML annotations using relationship-aware smart layout.",
-                model, elements, classNames, false, _ => color);
+                model, elements, classNames, false, name =>
+                {
+                    var definition = model.Classes.First(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                    return ClassColor(definition, model, domain, domainIndex);
+                });
         }
 
         if (model.Enums.Count > 0)
@@ -173,6 +176,15 @@ internal static class EaModelWriter
         };
         string configured = model.DiagramDomainColors.TryGetValue(domain, out string? color) ? color : fallback;
         return ParseEaColor(configured) ?? ParseEaColor(fallback)!.Value;
+    }
+
+    private static int ClassColor(ImportClass definition, ImportModel model, string domain, int domainIndex) =>
+        ParseEaColor(definition.DiagramColor) ?? DomainColor(model, domain, domainIndex);
+
+    private static int ExplicitClassColor(ImportModel model, string className)
+    {
+        var definition = model.Classes.FirstOrDefault(x => x.Name.Equals(className, StringComparison.OrdinalIgnoreCase));
+        return definition is null ? 0 : ParseEaColor(definition.DiagramColor) ?? 0;
     }
 
     // EA stores diagram colours as BGR decimal: red is the least-significant byte.

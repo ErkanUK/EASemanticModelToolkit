@@ -33,7 +33,7 @@ public sealed class Addin
     {
         if (itemName == AboutItem)
         {
-            MessageBox.Show("Imports JSON, JSON Schema, and YAML as an editable UML class model, with optional OWL/RDF and Turtle ontology exports. LinkML ea_domains annotations generate structured overview and domain diagrams.",
+            MessageBox.Show("Imports JSON, JSON Schema, and YAML as an editable UML class model. LinkML ea_domains annotations generate structured overview and domain diagrams.",
                 "EA JSON/YAML Model Importer", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
@@ -61,31 +61,13 @@ public sealed class Addin
                 model.Enums.Count, diagramSummary);
             if (options.ShowDialog() != DialogResult.OK) return;
 
-            var exported = new List<string>();
-            string directory = Path.GetDirectoryName(dialog.FileName) ?? Environment.CurrentDirectory;
-            string baseName = Path.GetFileNameWithoutExtension(dialog.FileName);
-            if (options.ExportOwl)
-            {
-                string path = Path.Combine(directory, baseName + ".owl");
-                File.WriteAllText(path, OwlSerializer.Serialize(model, OwlSerialization.RdfXml),
-                    new System.Text.UTF8Encoding(false));
-                exported.Add(path);
-            }
-            if (options.ExportTurtle)
-            {
-                string path = Path.Combine(directory, baseName + ".ttl");
-                File.WriteAllText(path, OwlSerializer.Serialize(model, OwlSerialization.Turtle),
-                    new System.Text.UTF8Encoding(false));
-                exported.Add(path);
-            }
             var package = EaModelWriter.Write(repository, target, model);
-            string exportSummary = exported.Count == 0 ? "" : "\n\nOntology files:\n" + string.Join("\n", exported);
-            MessageBox.Show($"Import complete.\nCreated package: {package.Name}{exportSummary}", "EA JSON/YAML Model Importer",
+            MessageBox.Show($"Import complete.\nCreated package: {package.Name}", "EA JSON/YAML Model Importer",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Import or ontology export failed:\n" + ex.Message, "EA JSON/YAML Model Importer",
+            MessageBox.Show("Import failed:\n" + ex.Message, "EA JSON/YAML Model Importer",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
