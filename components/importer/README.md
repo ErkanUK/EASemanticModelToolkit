@@ -36,9 +36,10 @@ The installer registers the add-in for the current Windows user under EA's 64-bi
 4. Choose **Import into selected package…**.
 5. Select a `.json`, `.schema.json`, `.yaml`, or `.yml` file.
 6. Review the preview showing the number of classes and enumerations.
-7. Select **Import** to create the model.
+7. If a matching package exists, choose whether to update it or create a new package.
+8. Select **Import**.
 
-The importer creates a new child package and a class diagram. It never overwrites an existing package. If the generated package name already exists, a numeric suffix is added.
+For a new import, the importer creates a child package and diagrams. If the generated package name already exists and **Create a new package** is selected, a numeric suffix is added.
 
 Generated diagrams use a deterministic, relationship-aware layout. Connected classes are arranged in graph layers, disconnected components are grouped, box sizes reflect their contents, and enumerations are placed separately. The algorithm uses model topology only and has no domain-specific class-name rules.
 
@@ -161,9 +162,9 @@ Convert documents using these features to JSON before importing them.
 
 ## Repeated imports and model updates
 
-This MVP treats every import as a new model. It does not merge changes into a previously imported package. This protects existing EA content and makes testing reversible: delete the generated child package if the import is not required.
+When a package with the same model name exists, the importer can update it in place. Classes, enumerations, attributes, associations, and generalizations are matched by name and updated or added. Existing diagram objects are reused, preserving their coordinates and sizes; newly introduced elements are added using generated positions.
 
-Future versions can add stable source identifiers, change comparison, and controlled model synchronization.
+Updates are non-destructive. Existing EA content that is absent from the revised source is retained, protecting manual additions and edits from silent deletion. A renamed source class is treated as a new class because stable source identifiers are not yet recorded. Keep generated diagram names unchanged if their layouts should be reused.
 
 ## Troubleshooting
 

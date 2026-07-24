@@ -57,12 +57,20 @@ public sealed class Addin
             var model = new SchemaConverter().Convert(root, Path.GetFileNameWithoutExtension(dialog.FileName));
             int domainCount = model.Classes.SelectMany(x => x.DiagramDomains).Distinct(StringComparer.OrdinalIgnoreCase).Count();
             string diagramSummary = domainCount > 0 ? $", {domainCount} structured domain diagrams" : ", one smart diagram";
+            var existingPackage = EaModelWriter.FindExistingPackage(target, model.Name);
             using var options = new ImportOptionsDialog(model.Name, target.Name, model.Classes.Count,
-                model.Enums.Count, diagramSummary);
+                model.Enums.Count, diagramSummary, existingPackage?.Name);
             if (options.ShowDialog() != DialogResult.OK) return;
 
-            var package = EaModelWriter.Write(repository, target, model);
-            MessageBox.Show($"Import complete.\nCreated package: {package.Name}", "EA JSON/YAML Model Importer",
+            bool updating = options.UpdateExisting && existingPackage is not null;
+            var writeTarget = !updating && existingPackage?.PackageID == target.PackageID && target.ParentID > 0
+                ? repository.GetPackageByID(target.ParentID)
+                : target;
+            var package = EaModelWriter.Write(repository, writeTarget, model, updating ? existingPackage : null);
+            MessageBox.Show(updating
+                    ? $"Update complete.\nUpdated package: {package.Name}\nExisting diagram positions were preserved."
+                    : $"Import complete.\nCreated package: {package.Name}",
+                "EA JSON/YAML Model Importer",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)

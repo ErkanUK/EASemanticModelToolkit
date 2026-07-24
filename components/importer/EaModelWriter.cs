@@ -2,24 +2,35 @@ namespace EAJsonModelImporter;
 
 internal static class EaModelWriter
 {
-    public static EA.Package Write(EA.Repository repository, EA.Package target, ImportModel model)
+    public static EA.Package? FindExistingPackage(EA.Package target, string modelName)
     {
-        string packageName = UniquePackageName(target, model.Name);
-        var package = (EA.Package)target.Packages.AddNew(packageName, "");
+        if (target.Name.Equals(modelName, StringComparison.OrdinalIgnoreCase)) return target;
+        foreach (EA.Package child in target.Packages)
+            if (child.Name.Equals(modelName, StringComparison.OrdinalIgnoreCase)) return child;
+        return null;
+    }
+
+    public static EA.Package Write(EA.Repository repository, EA.Package target, ImportModel model,
+        EA.Package? existingPackage = null)
+    {
+        bool updating = existingPackage is not null;
+        var package = existingPackage ?? CreatePackage(target, model.Name);
         package.Notes = model.Description;
         if (model.Version.Length > 0) package.Version = model.Version;
         package.Update();
-        target.Packages.Refresh();
 
-        var elements = new Dictionary<string, EA.Element>(StringComparer.OrdinalIgnoreCase);
+        var elements = updating
+            ? ExistingElements(package)
+            : new Dictionary<string, EA.Element>(StringComparer.OrdinalIgnoreCase);
         foreach (var definition in model.Enums)
         {
-            var element = (EA.Element)package.Elements.AddNew(definition.Name, "Enumeration");
+            var element = UpsertElement(package, elements, definition.Name, "Enumeration");
             element.Notes = definition.Description;
             element.Update();
             foreach (var value in definition.Values)
             {
-                var literal = (EA.Attribute)element.Attributes.AddNew(value, "");
+                var literal = FindAttribute(element, value)
+                    ?? (EA.Attribute)element.Attributes.AddNew(value, "");
                 if (definition.ValueDescriptions.TryGetValue(value, out var description)) literal.Notes = description;
                 literal.Update();
             }
@@ -28,10 +39,9 @@ internal static class EaModelWriter
         }
         foreach (var definition in model.Classes)
         {
-            var element = (EA.Element)package.Elements.AddNew(definition.Name, "Class");
+            var element = UpsertElement(package, elements, definition.Name, "Class");
             element.Notes = definition.Description;
             element.Update();
-            elements[definition.Name] = element;
         }
         package.Elements.Refresh();
 
@@ -42,7 +52,8 @@ internal static class EaModelWriter
             {
                 if (property.IsReference && elements.TryGetValue(property.Type, out var targetElement))
                 {
-                    var connector = (EA.Connector)element.Connectors.AddNew("", "Association");
+                    var connector = FindAssociation(element, property.Name, targetElement.ElementID)
+                        ?? (EA.Connector)element.Connectors.AddNew("", "Association");
                     connector.SupplierID = targetElement.ElementID;
                     connector.SupplierEnd.Role = property.Name;
                     connector.SupplierEnd.Cardinality = Cardinality(property);
@@ -51,7 +62,9 @@ internal static class EaModelWriter
                     continue;
                 }
 
-                var attribute = (EA.Attribute)element.Attributes.AddNew(property.Name, property.Type);
+                var attribute = FindAttribute(element, property.Name)
+                    ?? (EA.Attribute)element.Attributes.AddNew(property.Name, property.Type);
+                attribute.Type = property.Type;
                 attribute.Notes = property.Description;
                 attribute.IsID = property.Identifier;
                 attribute.LowerBound = property.Required ? "1" : "0";
@@ -65,26 +78,88 @@ internal static class EaModelWriter
             foreach (var parentName in definition.Parents.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 if (!elements.TryGetValue(parentName, out var parent)) continue;
-                var generalization = (EA.Connector)element.Connectors.AddNew("", "Generalization");
+                var generalization = FindGeneralization(element, parent.ElementID)
+                    ?? (EA.Connector)element.Connectors.AddNew("", "Generalization");
                 generalization.SupplierID = parent.ElementID;
                 generalization.Update();
             }
             element.Connectors.Refresh();
         }
 
-        CreateDiagrams(repository, package, model, elements);
+        CreateDiagrams(repository, package, model, elements, updating);
         repository.RefreshModelView(package.PackageID);
         return package;
     }
 
+    private static EA.Package CreatePackage(EA.Package target, string modelName)
+    {
+        string packageName = UniquePackageName(target, modelName);
+        var package = (EA.Package)target.Packages.AddNew(packageName, "");
+        package.Update();
+        target.Packages.Refresh();
+        return package;
+    }
+
+    private static Dictionary<string, EA.Element> ExistingElements(EA.Package package)
+    {
+        var elements = new Dictionary<string, EA.Element>(StringComparer.OrdinalIgnoreCase);
+        foreach (EA.Element element in package.Elements)
+            elements.TryAdd(element.Name, element);
+        return elements;
+    }
+
+    private static EA.Element UpsertElement(EA.Package package, IDictionary<string, EA.Element> elements,
+        string name, string type)
+    {
+        if (elements.TryGetValue(name, out var existing))
+        {
+            if (!existing.Type.Equals(type, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Cannot update '{name}': the existing EA element is '{existing.Type}', not '{type}'.");
+            return existing;
+        }
+        var created = (EA.Element)package.Elements.AddNew(name, type);
+        created.Update();
+        elements[name] = created;
+        return created;
+    }
+
+    private static EA.Attribute? FindAttribute(EA.Element element, string name)
+    {
+        foreach (EA.Attribute attribute in element.Attributes)
+            if (attribute.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) return attribute;
+        return null;
+    }
+
+    private static EA.Connector? FindAssociation(EA.Element element, string role, int supplierId)
+    {
+        foreach (EA.Connector connector in element.Connectors)
+            if (connector.Type.Equals("Association", StringComparison.OrdinalIgnoreCase)
+                && connector.ClientID == element.ElementID
+                && connector.SupplierID == supplierId
+                && connector.SupplierEnd.Role.Equals(role, StringComparison.OrdinalIgnoreCase))
+                return connector;
+        return null;
+    }
+
+    private static EA.Connector? FindGeneralization(EA.Element element, int supplierId)
+    {
+        foreach (EA.Connector connector in element.Connectors)
+            if (connector.Type.Equals("Generalization", StringComparison.OrdinalIgnoreCase)
+                && connector.ClientID == element.ElementID
+                && connector.SupplierID == supplierId)
+                return connector;
+        return null;
+    }
+
     private static void CreateDiagrams(EA.Repository repository, EA.Package package, ImportModel model,
-        IReadOnlyDictionary<string, EA.Element> elements)
+        IReadOnlyDictionary<string, EA.Element> elements, bool preserveExistingLayout)
     {
         if (!model.Classes.Any(x => x.DiagramDomains.Count > 0))
         {
             CreateSmartDiagram(repository, package, model.Name + " Class Model",
                 "Generated from JSON, JSON Schema, or YAML using relationship-aware smart layout.",
-                model, elements, null, true, name => ExplicitClassColor(model, name));
+                model, elements, null, true, name => ExplicitClassColor(model, name), preserveExistingLayout);
             return;
         }
 
@@ -98,7 +173,7 @@ internal static class EaModelWriter
                 var definition = model.Classes.First(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
                 string domain = PrimaryDomain(definition);
                 return ClassColor(definition, model, domain, domainIndexes[domain]);
-            });
+            }, preserveExistingLayout);
         for (int domainIndex = 0; domainIndex < domains.Count; domainIndex++)
         {
             string domain = domains[domainIndex];
@@ -111,32 +186,51 @@ internal static class EaModelWriter
                 {
                     var definition = model.Classes.First(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
                     return ClassColor(definition, model, domain, domainIndex);
-                });
+                }, preserveExistingLayout);
         }
 
         if (model.Enums.Count > 0)
         {
             CreateSmartDiagram(repository, package, model.Name + " - Enumerations",
                 "Enumerations are separated from domain views to reduce diagram clutter.",
-                model, elements, [], true, _ => 0);
+                model, elements, [], true, _ => 0, preserveExistingLayout);
         }
     }
 
     private static void CreateSmartDiagram(EA.Repository repository, EA.Package package, string name, string notes,
         ImportModel model, IReadOnlyDictionary<string, EA.Element> elements, IEnumerable<string>? classNames,
-        bool includeEnums, Func<string, int> backgroundColor)
+        bool includeEnums, Func<string, int> backgroundColor, bool preserveExistingLayout)
     {
-        var diagram = (EA.Diagram)package.Diagrams.AddNew(name, "Logical");
+        var diagram = preserveExistingLayout ? FindDiagram(package, name) : null;
+        diagram ??= (EA.Diagram)package.Diagrams.AddNew(name, "Logical");
         diagram.Notes = notes;
         diagram.Update();
+        var existingObjects = new Dictionary<int, EA.DiagramObject>();
+        if (preserveExistingLayout)
+            foreach (EA.DiagramObject diagramObject in diagram.DiagramObjects)
+                existingObjects.TryAdd(diagramObject.ElementID, diagramObject);
         var placements = SmartDiagramLayout.Arrange(model, classNames, includeEnums);
         foreach (var (elementName, box) in placements)
         {
             if (!elements.TryGetValue(elementName, out var element)) continue;
+            if (existingObjects.TryGetValue(element.ElementID, out var existingObject))
+            {
+                int color = backgroundColor(elementName);
+                if (color != 0) existingObject.BackgroundColor = color;
+                existingObject.Update();
+                continue;
+            }
             AddDiagramObject(diagram, element, box, backgroundColor(elementName));
         }
         diagram.DiagramObjects.Refresh();
         repository.SaveDiagram(diagram.DiagramID);
+    }
+
+    private static EA.Diagram? FindDiagram(EA.Package package, string name)
+    {
+        foreach (EA.Diagram diagram in package.Diagrams)
+            if (diagram.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) return diagram;
+        return null;
     }
 
     private static void AddDiagramObject(EA.Diagram diagram, EA.Element element, DiagramBox box,

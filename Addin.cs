@@ -77,12 +77,21 @@ public sealed class Addin
             string diagramSummary = domainCount > 0
                 ? $", {domainCount} structured domain diagrams"
                 : ", one smart diagram";
+            var existingPackage = EAJsonModelImporter.EaModelWriter.FindExistingPackage(target, model.Name);
             using var options = new EAJsonModelImporter.ImportOptionsDialog(model.Name, target.Name,
-                model.Classes.Count, model.Enums.Count, diagramSummary);
+                model.Classes.Count, model.Enums.Count, diagramSummary, existingPackage?.Name);
             if (options.ShowDialog() != DialogResult.OK) return;
 
-            var package = EAJsonModelImporter.EaModelWriter.Write(repository, target, model);
-            MessageBox.Show($"Import complete.\nCreated package: {package.Name}", ProductName,
+            bool updating = options.UpdateExisting && existingPackage is not null;
+            var writeTarget = !updating && existingPackage?.PackageID == target.PackageID && target.ParentID > 0
+                ? repository.GetPackageByID(target.ParentID)
+                : target;
+            var package = EAJsonModelImporter.EaModelWriter.Write(repository, writeTarget, model,
+                updating ? existingPackage : null);
+            MessageBox.Show(updating
+                    ? $"Update complete.\nUpdated package: {package.Name}\nExisting diagram positions were preserved."
+                    : $"Import complete.\nCreated package: {package.Name}",
+                ProductName,
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
