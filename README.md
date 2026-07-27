@@ -65,6 +65,7 @@ Newly imported diagrams use A3 landscape pages and Orthogonal - Square connector
 ```
 
 Supported page sizes are `A3`, `A4`, `Letter`, and `Legal`. Existing diagrams are not reformatted during update imports, preserving their manually adjusted page, layout, and connector routing.
+The page size gets overruled somehow by EA settings.... So that is not working a.t.m.
 
 ## Development
 
