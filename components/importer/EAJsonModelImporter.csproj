@@ -14,5 +14,9 @@
       <HintPath>lib\Interop.EA.dll</HintPath>
       <Private>true</Private>
     </Reference>
+    <Content Include="..\..\semantic-model-toolkit.settings.json" Link="semantic-model-toolkit.settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 </Project>

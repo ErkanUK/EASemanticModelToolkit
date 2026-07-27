@@ -202,7 +202,16 @@ internal static class EaModelWriter
         bool includeEnums, Func<string, int> backgroundColor, bool preserveExistingLayout)
     {
         var diagram = preserveExistingLayout ? FindDiagram(package, name) : null;
+        bool isNewDiagram = diagram is null;
         diagram ??= (EA.Diagram)package.Diagrams.AddNew(name, "Logical");
+        var settings = ToolkitSettings.Load().DiagramDefaults;
+        if (isNewDiagram)
+        {
+            var (width, height) = settings.PageDimensions();
+            diagram.cx = width;
+            diagram.cy = height;
+            diagram.Orientation = settings.IsLandscape() ? "L" : "P";
+        }
         diagram.Notes = notes;
         diagram.Update();
         var existingObjects = new Dictionary<int, EA.DiagramObject>();
@@ -223,6 +232,15 @@ internal static class EaModelWriter
             AddDiagramObject(diagram, element, box, backgroundColor(elementName));
         }
         diagram.DiagramObjects.Refresh();
+        if (isNewDiagram)
+        {
+            diagram.DiagramLinks.Refresh();
+            foreach (EA.DiagramLink link in diagram.DiagramLinks)
+            {
+                link.LineStyle = settings.LineStyle();
+                link.Update();
+            }
+        }
         repository.SaveDiagram(diagram.DiagramID);
     }
 
