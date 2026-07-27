@@ -17,15 +17,16 @@ Use Semantic Model Toolkit when one business-friendly EA model must serve many a
 - .NET 9 SDK when building from source
 
 ## Capabilities
-Capability	Sparx ODM	Semantic Model Toolkit
-Source model	Requires an ODM owlOntology or rdfDocument package	Works from ordinary EA/UML-style semantic models
-Import formats	OWL/RDF XML	LinkML YAML, YAML, JSON and JSON Schema
-Export formats	OWL/RDF XML	LinkML YAML, JSON Schema, Markdown, draw.io, SVG, OWL/RDF-XML and OWL/Turtle
-Round-trip updates	Imports into an ODM package	Updates an existing model while preserving manually improved diagram positions and sizes
-Documentation	Ontology file is the main output	Produces human-readable Markdown and SVG documentation
-Visual sharing	Primarily inside EA	Exports draw.io and SVG for users without EA
-LinkML workflow	Not built in	LinkML is a first-class import/export format
-Customisation	Built-in, proprietary EA feature	Open-source and adaptable to project conventions
+| Capability | Sparx ODM | Semantic Model Toolkit |
+|---|---|---|
+| Source model | Requires an ODM `owlOntology` or `rdfDocument` package | Works from ordinary EA/UML-style semantic models |
+| Import formats | OWL/RDF XML | LinkML YAML, YAML, JSON and JSON Schema |
+| Export formats | OWL/RDF XML | LinkML YAML, JSON Schema, Markdown, draw.io, SVG, OWL/RDF-XML and OWL/Turtle |
+| Round-trip updates | Imports into an ODM package | Updates an existing model while preserving manually improved diagram positions and sizes |
+| Documentation | Ontology file is the main output | Produces human-readable Markdown and SVG documentation |
+| Visual sharing | Primarily inside EA | Exports draw.io and SVG for users without EA |
+| LinkML workflow | Not built in | LinkML is a first-class import/export format |
+| Customisation | Built-in, proprietary EA feature | Open-source and adaptable to project conventions |
 
 
 ## Install
