@@ -5,11 +5,28 @@ A unified 64-bit add-in for Sparx Enterprise Architect 17. It provides one **Sem
 - importing JSON, JSON Schema, and YAML into editable EA packages; and
 - exporting selected EA packages to LinkML YAML, JSON Schema, Markdown, draw.io, SVG, OWL/RDF-XML, and OWL/Turtle.
 
+- What is different compared to the Sparx ODM Export ?
+
+Use Sparx ODM to author a formal ODM ontology. 
+Use Semantic Model Toolkit when one business-friendly EA model must serve many audiences and technical ecosystems—including LinkML, JSON Schema, documentation, diagrams and OWL.
+
 ## Requirements
 
 - Enterprise Architect 17, 64-bit
 - .NET 9 Desktop Runtime, x64
 - .NET 9 SDK when building from source
+
+## Capabilities
+Capability	Sparx ODM	Semantic Model Toolkit
+Source model	Requires an ODM owlOntology or rdfDocument package	Works from ordinary EA/UML-style semantic models
+Import formats	OWL/RDF XML	LinkML YAML, YAML, JSON and JSON Schema
+Export formats	OWL/RDF XML	LinkML YAML, JSON Schema, Markdown, draw.io, SVG, OWL/RDF-XML and OWL/Turtle
+Round-trip updates	Imports into an ODM package	Updates an existing model while preserving manually improved diagram positions and sizes
+Documentation	Ontology file is the main output	Produces human-readable Markdown and SVG documentation
+Visual sharing	Primarily inside EA	Exports draw.io and SVG for users without EA
+LinkML workflow	Not built in	LinkML is a first-class import/export format
+Customisation	Built-in, proprietary EA feature	Open-source and adaptable to project conventions
+
 
 ## Install
 
