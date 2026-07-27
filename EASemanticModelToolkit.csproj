@@ -13,6 +13,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Addin.cs" />
+    <Compile Include="AboutDialog.cs" />
     <Compile Include="components\importer\*.cs"
              Exclude="components\importer\Addin.cs;components\importer\AssemblyInfo.cs" />
     <Compile Include="components\exporter\*.cs"

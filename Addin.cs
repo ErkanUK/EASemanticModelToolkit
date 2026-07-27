@@ -43,9 +43,8 @@ public sealed class Addin
                 Export(repository);
                 break;
             case AboutItem:
-                MessageBox.Show(
-                    "Imports JSON and YAML models into Enterprise Architect and exports selected packages to LinkML, JSON Schema, Markdown, diagrams, and OWL.",
-                    ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                using (var about = new AboutDialog())
+                    about.ShowDialog();
                 break;
         }
     }
