@@ -30,7 +30,6 @@ internal sealed class ToolkitSettings
 internal sealed class DiagramDefaults
 {
     public string ConnectorLineStyle { get; set; } = "OrthogonalSquare";
-    public string PageSize { get; set; } = "A3";
     public string Orientation { get; set; } = "Landscape";
 
     public EA.LinkLineStyle LineStyle() =>
@@ -46,18 +45,6 @@ internal sealed class DiagramDefaults
             "orthogonalrounded" or "orthogonal-rounded" => EA.LinkLineStyle.LineStyleOrthogonalRounded,
             _ => EA.LinkLineStyle.LineStyleOrthogonalSquare
         };
-
-    public (int Width, int Height) PageDimensions()
-    {
-        var portrait = PageSize.Trim().ToUpperInvariant() switch
-        {
-            "A4" => (Width: 827, Height: 1169),
-            "LETTER" => (Width: 850, Height: 1100),
-            "LEGAL" => (Width: 850, Height: 1400),
-            _ => (Width: 1169, Height: 1654)
-        };
-        return IsLandscape() ? (portrait.Height, portrait.Width) : portrait;
-    }
 
     public bool IsLandscape() =>
         Orientation.Equals("Landscape", StringComparison.OrdinalIgnoreCase)

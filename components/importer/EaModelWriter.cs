@@ -207,13 +207,7 @@ internal static class EaModelWriter
         var settings = ToolkitSettings.Load().DiagramDefaults;
         if (isNewDiagram)
         {
-            var (width, height) = settings.PageDimensions();
-            // EA resets cx/cy to its default paper size when Orientation changes,
-            // so set the orientation first and the requested paper dimensions last.
             diagram.Orientation = settings.IsLandscape() ? "L" : "P";
-            diagram.Update();
-            diagram.cx = width;
-            diagram.cy = height;
         }
         diagram.Notes = notes;
         diagram.Update();

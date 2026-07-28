@@ -52,20 +52,18 @@ Updates are deliberately non-destructive: EA elements, attributes, connectors, a
 
 ## Diagram defaults
 
-Newly imported diagrams use A3 landscape pages and Orthogonal - Square connector lines. These values can be changed in `semantic-model-toolkit.settings.json` beside the installed add-in:
+Newly imported diagrams use landscape orientation and Orthogonal - Square connector lines. These values can be changed in `semantic-model-toolkit.settings.json` beside the installed add-in:
 
 ```json
 {
   "diagramDefaults": {
     "connectorLineStyle": "OrthogonalSquare",
-    "pageSize": "A3",
     "orientation": "Landscape"
   }
 }
 ```
 
-Supported page sizes are `A3`, `A4`, `Letter`, and `Legal`. Existing diagrams are not reformatted during update imports, preserving their manually adjusted page, layout, and connector routing.
-The page size gets overruled somehow by EA settings.... So that is not working a.t.m.
+Enterprise Architect does not expose a writable paper-size setting through its Automation API. New diagrams therefore inherit EA's application-wide default paper size. To use A3, set it in **Start > Appearance > Preferences > Diagram > Default paper size** before importing. Existing diagrams are not reformatted during update imports, preserving their manually adjusted page, layout, and connector routing.
 
 ## Development
 
