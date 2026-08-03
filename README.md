@@ -39,8 +39,12 @@ without preventing the PlantUML document from rendering. In LinkML output, a mis
 Close Enterprise Architect, then run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -BuildFromSource
+powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
+
+Release and test ZIPs install their included prebuilt binaries. When running from a full source checkout,
+add `-BuildFromSource` to compile before installation. If that switch is accidentally used with a binary-only
+package, the installer reports a warning and safely uses the included prebuilt add-in.
 
 Restart EA and open **Specialize > Add-Ins > Semantic Model Toolkit**.
 

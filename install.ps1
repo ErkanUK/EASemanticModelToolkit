@@ -6,11 +6,25 @@ $ErrorActionPreference = 'Stop'
 $project = Join-Path $PSScriptRoot 'EASemanticModelToolkit.csproj'
 $publish = Join-Path $PSScriptRoot 'publish'
 $prebuilt = Join-Path $PSScriptRoot 'prebuilt'
-if ($BuildFromSource -or -not (Test-Path (Join-Path $prebuilt 'EASemanticModelToolkit.comhost.dll'))) {
+$prebuiltHost = Join-Path $prebuilt 'EASemanticModelToolkit.comhost.dll'
+$hasProject = Test-Path -LiteralPath $project
+$hasPrebuilt = Test-Path -LiteralPath $prebuiltHost
+
+if ($BuildFromSource -and $hasProject) {
     dotnet publish $project -c Release --self-contained false -o $publish
+    if ($LASTEXITCODE -ne 0) { throw "Building EASemanticModelToolkit failed with exit code $LASTEXITCODE." }
+    $source = $publish
+} elseif ($hasPrebuilt) {
+    if ($BuildFromSource) {
+        Write-Warning "-BuildFromSource was requested, but this binary package does not include the project source. Installing the included prebuilt add-in instead."
+    }
+    $source = $prebuilt
+} elseif ($hasProject) {
+    dotnet publish $project -c Release --self-contained false -o $publish
+    if ($LASTEXITCODE -ne 0) { throw "Building EASemanticModelToolkit failed with exit code $LASTEXITCODE." }
     $source = $publish
 } else {
-    $source = $prebuilt
+    throw "This package contains neither prebuilt\EASemanticModelToolkit.comhost.dll nor EASemanticModelToolkit.csproj. Download the complete release package."
 }
 if (Test-Path $InstallDir) { Remove-Item -LiteralPath $InstallDir -Recurse -Force }
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
