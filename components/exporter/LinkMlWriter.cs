@@ -8,6 +8,11 @@ internal static class LinkMlWriter
     public static string Write(ModelSnapshot model)
     {
         var schemaName = Identifier(model.Name);
+        var declaredRanges = model.Classes.Select(x => Identifier(x.Name))
+            .Concat(model.Enums.Select(x => Identifier(x.Name)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var mixinNames = model.Classes.SelectMany(x => x.Parents.Skip(1))
+            .Select(Identifier).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var b = new StringBuilder();
         b.AppendLine("id: https://example.org/" + schemaName);
         b.AppendLine("name: " + Scalar(schemaName));
@@ -39,6 +44,7 @@ internal static class LinkMlWriter
             if (cls.Notes.Length > 0) b.AppendLine("    description: " + Scalar(cls.Notes));
             if (!string.IsNullOrWhiteSpace(cls.Version)) b.AppendLine("    version: " + Scalar(cls.Version));
             if (cls.Abstract) b.AppendLine("    abstract: true");
+            if (mixinNames.Contains(Identifier(cls.Name))) b.AppendLine("    mixin: true");
             if (cls.Parents.Count > 0) b.AppendLine("    is_a: " + Identifier(cls.Parents[0]));
             if (cls.Parents.Count > 1)
             {
@@ -51,7 +57,8 @@ internal static class LinkMlWriter
             b.AppendLine("    attributes:");
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in cls.Properties)
-                WriteAttribute(b, Unique(property.Name, names), property.Type, property.Notes, property.Lower, property.Upper, property.ReadOnly);
+                WriteAttribute(b, Unique(property.Name, names), property.Type, property.Notes, property.Lower,
+                    property.Upper, property.ReadOnly, declaredRanges);
             foreach (var relation in associations)
             {
                 bool forward = relation.SourceId == cls.Id;
@@ -59,16 +66,17 @@ internal static class LinkMlWriter
                 string other = forward ? relation.TargetName : relation.SourceName;
                 string multiplicity = forward ? relation.TargetMultiplicity : relation.SourceMultiplicity;
                 WriteAttribute(b, Unique(string.IsNullOrWhiteSpace(role) ? LowerCamel(other) : role, names), other, relation.Notes,
-                    Lower(multiplicity), Upper(multiplicity), false);
+                    Lower(multiplicity), Upper(multiplicity), false, declaredRanges);
             }
         }
         return b.ToString();
     }
 
-    private static void WriteAttribute(StringBuilder b, string name, string type, string notes, string lower, string upper, bool readOnly)
+    private static void WriteAttribute(StringBuilder b, string name, string type, string notes, string lower,
+        string upper, bool readOnly, IReadOnlySet<string> declaredRanges)
     {
         b.AppendLine("      " + Identifier(name) + ":");
-        b.AppendLine("        range: " + Range(type));
+        b.AppendLine("        range: " + Range(type, declaredRanges));
         if (notes.Length > 0) b.AppendLine("        description: " + Scalar(notes));
         if (lower != "0") b.AppendLine("        required: true");
         bool many = upper == "*" || upper.Equals("n", StringComparison.OrdinalIgnoreCase) || (int.TryParse(upper, out var max) && max > 1);
@@ -78,17 +86,24 @@ internal static class LinkMlWriter
         if (readOnly) b.AppendLine("        readonly: true");
     }
 
-    private static string Range(string type) => type.Trim().ToLowerInvariant() switch
+    private static string Range(string type, IReadOnlySet<string> declaredRanges)
     {
-        "string" or "char" or "varchar" or "text" => "string",
-        "int" or "integer" or "short" or "long" => "integer",
-        "float" or "double" or "decimal" or "real" => "float",
-        "bool" or "boolean" => "boolean",
-        "date" => "date",
-        "datetime" or "date-time" => "datetime",
-        "uri" or "url" => "uri",
-        _ => Identifier(type)
-    };
+        if (string.IsNullOrWhiteSpace(type)) return "string";
+        string? primitive = type.Trim().ToLowerInvariant() switch
+        {
+            "string" or "char" or "varchar" or "text" => "string",
+            "int" or "integer" or "short" or "long" => "integer",
+            "float" or "double" or "decimal" or "real" => "float",
+            "bool" or "boolean" => "boolean",
+            "date" => "date",
+            "datetime" or "date-time" => "datetime",
+            "uri" or "url" => "uri",
+            _ => null
+        };
+        if (primitive is not null) return primitive;
+        string identifier = Identifier(type);
+        return declaredRanges.Contains(identifier) ? identifier : "string";
+    }
 
     internal static string Identifier(string value)
     {

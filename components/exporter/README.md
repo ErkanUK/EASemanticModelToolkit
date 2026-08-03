@@ -6,6 +6,7 @@ A 64-bit Sparx Enterprise Architect 17 add-in that exports the package selected 
 - a JSON Schema document;
 - Markdown documentation, similar in spirit to EA's F8 document generation;
 - an editable draw.io class diagram;
+- a PlantUML class diagram source file;
 - every existing EA diagram in the selected package tree, exported natively as SVG and embedded in the Markdown;
 - an OWL ontology serialized as RDF/XML; and
 - an OWL ontology serialized as Turtle.
@@ -30,7 +31,7 @@ The script installs the included prebuilt add-in for the current Windows user an
 1. Select a package in EA's Browser.
 2. Open **Specialize > Add-Ins > LinkML Documentation** (the exact ribbon location can vary with workspace layout).
 3. Choose **Export selected package…**.
-4. Keep or clear the checkboxes for LinkML, JSON Schema, Markdown, draw.io, SVG, OWL/RDF-XML and OWL/Turtle. All formats are checked by default.
+4. Keep or clear the checkboxes for LinkML, JSON Schema, Markdown, draw.io, PlantUML, SVG, OWL/RDF-XML and OWL/Turtle. All formats are checked by default.
 5. Select a destination folder.
 
 The add-in creates a subfolder named after the package and writes only the selected formats. Existing EA diagrams are written to its `diagrams` subfolder as numbered SVG files and embedded in the generated `.md` document. Open the `.drawio` file in draw.io/diagrams.net for an editable generated model overview, or open the `.owl`/`.ttl` files in Protégé.

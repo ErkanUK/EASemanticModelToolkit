@@ -3,7 +3,7 @@
 A unified 64-bit add-in for Sparx Enterprise Architect 17. It provides one **Semantic Model Toolkit** menu for:
 
 - importing JSON, JSON Schema, and YAML into editable EA packages; and
-- exporting selected EA packages to LinkML YAML, JSON Schema, Markdown, draw.io, SVG, OWL/RDF-XML, and OWL/Turtle.
+- exporting selected EA packages to LinkML YAML, JSON Schema, Markdown, draw.io, PlantUML, SVG, OWL/RDF-XML, and OWL/Turtle.
 
 - What is different compared to the Sparx ODM Export ?
 
@@ -21,12 +21,17 @@ Use Semantic Model Toolkit when one business-friendly EA model must serve many a
 |---|---|---|
 | Source model | Requires an ODM `owlOntology` or `rdfDocument` package | Works from ordinary EA/UML-style semantic models |
 | Import formats | OWL/RDF XML | LinkML YAML, YAML, JSON and JSON Schema |
-| Export formats | OWL/RDF XML | LinkML YAML, JSON Schema, Markdown, draw.io, SVG, OWL/RDF-XML and OWL/Turtle |
+| Export formats | OWL/RDF XML | LinkML YAML, JSON Schema, Markdown, draw.io, PlantUML, SVG, OWL/RDF-XML and OWL/Turtle |
 | Round-trip updates | Imports into an ODM package | Updates an existing model while preserving manually improved diagram positions and sizes |
 | Documentation | Ontology file is the main output | Produces human-readable Markdown and SVG documentation |
 | Visual sharing | Primarily inside EA | Exports draw.io and SVG for users without EA |
 | LinkML workflow | Not built in | LinkML is a first-class import/export format |
 | Customisation | Built-in, proprietary EA feature | Open-source and adaptable to project conventions |
+
+PlantUML export writes a self-contained `.puml` class diagram containing classes, enumerations, attributes,
+inheritance, associations, roles and multiplicities. Missing EA attribute datatypes are displayed as `unnamed`
+without preventing the PlantUML document from rendering. In LinkML output, a missing datatype falls back to
+`string` so the generated schema does not contain an unresolved `range: unnamed` reference.
 
 
 ## Install

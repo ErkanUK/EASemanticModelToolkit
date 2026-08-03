@@ -5,7 +5,8 @@ namespace EA17LinkMLExporter;
 internal static class MarkdownWriter
 {
     public static string Write(ModelSnapshot model, string? drawIoName, string? fallbackSvgName, string? linkMlName,
-        string? jsonSchemaName, string? owlName, string? turtleName, IReadOnlyList<ExportedDiagram> eaDiagrams)
+        string? jsonSchemaName, string? owlName, string? turtleName, string? plantUmlName,
+        IReadOnlyList<ExportedDiagram> eaDiagrams)
     {
         var b = new StringBuilder();
         b.AppendLine("# " + model.Name).AppendLine();
@@ -15,6 +16,7 @@ internal static class MarkdownWriter
         if (linkMlName is not null) links.Add("[LinkML schema](" + linkMlName + ")");
         if (jsonSchemaName is not null) links.Add("[JSON Schema](" + jsonSchemaName + ")");
         if (drawIoName is not null) links.Add("[Editable draw.io diagram](" + drawIoName + ")");
+        if (plantUmlName is not null) links.Add("[PlantUML class diagram](" + plantUmlName + ")");
         if (owlName is not null) links.Add("[OWL/RDF-XML ontology](" + owlName + ")");
         if (turtleName is not null) links.Add("[OWL Turtle ontology](" + turtleName + ")");
         if (links.Count > 0) b.AppendLine(string.Join(" · ", links)).AppendLine();

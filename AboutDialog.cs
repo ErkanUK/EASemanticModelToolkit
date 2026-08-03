@@ -28,7 +28,7 @@ internal sealed class AboutDialog : Form
         };
         var description = new Label
         {
-            Text = "Imports JSON and YAML models into Enterprise Architect and exports selected packages to LinkML, JSON Schema, Markdown, diagrams, and OWL.",
+            Text = "Imports JSON and YAML models into Enterprise Architect and exports selected packages to LinkML, JSON Schema, Markdown, draw.io, PlantUML, SVG, and OWL.",
             AutoSize = false,
             Location = new Point(22, 53),
             Size = new Size(454, 55)

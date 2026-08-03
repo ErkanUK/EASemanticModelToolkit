@@ -16,6 +16,7 @@ internal static class Exporter
         var jsonSchemaName = stem + ".schema.json";
         var mdName = stem + ".md";
         var drawIoName = stem + ".drawio";
+        var plantUmlName = stem + ".puml";
         var owlName = stem + ".owl";
         var turtleName = stem + ".ttl";
         if (options.LinkMl)
@@ -24,6 +25,8 @@ internal static class Exporter
             File.WriteAllText(Path.Combine(directory, jsonSchemaName), JsonSchemaWriter.Write(model), new UTF8Encoding(false));
         if (options.DrawIo)
             File.WriteAllText(Path.Combine(directory, drawIoName), DiagramWriter.WriteDrawIo(model), new UTF8Encoding(false));
+        if (options.PlantUml)
+            File.WriteAllText(Path.Combine(directory, plantUmlName), PlantUmlWriter.Write(model), new UTF8Encoding(false));
         IReadOnlyList<ExportedDiagram> eaDiagrams = [];
         string? fallbackSvgName = null;
         if (options.Svg)
@@ -43,7 +46,8 @@ internal static class Exporter
             File.WriteAllText(Path.Combine(directory, mdName), MarkdownWriter.Write(model,
                 options.DrawIo ? drawIoName : null, fallbackSvgName, options.LinkMl ? yamlName : null,
                 options.JsonSchema ? jsonSchemaName : null, options.Owl ? owlName : null,
-                options.Turtle ? turtleName : null, eaDiagrams), new UTF8Encoding(false));
+                options.Turtle ? turtleName : null, options.PlantUml ? plantUmlName : null,
+                eaDiagrams), new UTF8Encoding(false));
         return directory;
     }
 
