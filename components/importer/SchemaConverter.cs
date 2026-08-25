@@ -8,6 +8,7 @@ internal sealed class SchemaConverter
     private readonly Dictionary<string, ImportClass> _classes = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, ImportEnum> _enums = new(StringComparer.OrdinalIgnoreCase);
     private ImportModel _model = null!;
+    private JsonObject? _linkMlSlots;
 
     public ImportModel Convert(JsonNode root, string fallbackName)
     {
@@ -59,6 +60,9 @@ internal sealed class SchemaConverter
     private void ConvertLinkMl(JsonObject root)
     {
         if (root["classes"] is not JsonObject classes) return;
+        _linkMlSlots = root["slots"] as JsonObject;
+        foreach (var (name, node) in classes)
+            if (node is JsonObject) GetClass(TypeName(name));
         foreach (var (name, node) in classes)
             if (node is JsonObject definition)
                 InferObject(definition, TypeName(name), "");
@@ -197,6 +201,10 @@ internal sealed class SchemaConverter
         cls.Description = Text(obj, "description") ?? description;
         if (Text(obj, "is_a") is { } parent && !cls.Parents.Contains(TypeName(parent)))
             cls.Parents.Add(TypeName(parent));
+        if (obj["mixins"] is JsonArray mixins)
+            foreach (string mixin in mixins.Select(x => x?.ToString() ?? "").Where(x => x.Length > 0))
+                if (!cls.Parents.Contains(TypeName(mixin))) cls.Parents.Add(TypeName(mixin));
+        if (obj["slots"] is JsonArray slots) ParseSlotReferences(cls, slots, obj["slot_usage"] as JsonObject);
         ParseDiagramAnnotations(cls, obj["annotations"] as JsonObject);
         foreach (var (propertyName, value) in obj)
         {
@@ -284,6 +292,44 @@ internal sealed class SchemaConverter
         }
     }
 
+    private void ParseSlotReferences(ImportClass cls, JsonArray slots, JsonObject? slotUsage)
+    {
+        foreach (string slotName in slots.Select(x => x?.ToString() ?? "").Where(x => x.Length > 0))
+        {
+            var definition = _linkMlSlots?[slotName] as JsonObject;
+            var usage = slotUsage?[slotName] as JsonObject;
+            string range = Text(usage, "range") ?? Text(definition, "range")
+                ?? Text(usage, "type") ?? Text(definition, "type") ?? "string";
+            bool required = Boolean(usage, "required", Boolean(definition, "required"))
+                || Integer(usage, "minimum_cardinality", Integer(definition, "minimum_cardinality")) > 0;
+            bool many = Boolean(usage, "multivalued", Boolean(definition, "multivalued"))
+                || MaximumCardinalityIsMany(usage) || MaximumCardinalityIsMany(definition);
+            string primitive = LinkMlPrimitive(range);
+            string namedType = TypeName(range);
+            bool isEnum = _enums.ContainsKey(namedType);
+            bool reference = primitive.Length == 0 && !isEnum;
+            var property = Property(slotName, primitive.Length == 0 ? namedType : primitive,
+                Text(usage, "description") ?? Text(definition, "description") ?? "", required, many, reference);
+            property.Identifier = Boolean(usage, "identifier", Boolean(definition, "identifier"));
+            AddOrReplaceProperty(cls, property);
+        }
+    }
+
+    private static void AddOrReplaceProperty(ImportClass cls, ImportProperty property)
+    {
+        int index = cls.Properties.FindIndex(x => x.Name.Equals(property.Name, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0) cls.Properties[index] = property;
+        else cls.Properties.Add(property);
+    }
+
+    private static bool MaximumCardinalityIsMany(JsonObject? obj)
+    {
+        if (obj?["maximum_cardinality"] is not JsonValue value) return false;
+        if (value.TryGetValue<int>(out int integer)) return integer > 1;
+        string text = value.ToString();
+        return text == "*" || (int.TryParse(text, out integer) && integer > 1);
+    }
+
     private static void MarkUniqueKeys(ImportClass cls, JsonObject uniqueKeys)
     {
         foreach (var definition in uniqueKeys.Select(x => x.Value).OfType<JsonObject>())
@@ -350,18 +396,21 @@ internal sealed class SchemaConverter
         || name.Equals("is_a", StringComparison.OrdinalIgnoreCase)
         || name.Equals("class_uri", StringComparison.OrdinalIgnoreCase)
         || name.Equals("abstract", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("mixin", StringComparison.OrdinalIgnoreCase)
         || name.Equals("mixins", StringComparison.OrdinalIgnoreCase)
         || name.Equals("annotations", StringComparison.OrdinalIgnoreCase)
         || name.Equals("unique_keys", StringComparison.OrdinalIgnoreCase)
-        || name.Equals("slots", StringComparison.OrdinalIgnoreCase);
+        || name.Equals("slots", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("slot_usage", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("source", StringComparison.OrdinalIgnoreCase);
 
-    private static bool Boolean(JsonObject obj, string name) => obj[name] is JsonValue value
-        && value.TryGetValue<bool>(out var result) && result;
-    private static int Integer(JsonObject obj, string name)
+    private static bool Boolean(JsonObject? obj, string name, bool fallback = false) => obj?[name] is JsonValue value
+        && value.TryGetValue<bool>(out var result) ? result : fallback;
+    private static int Integer(JsonObject? obj, string name, int fallback = 0)
     {
-        if (obj[name] is not JsonValue value) return 0;
+        if (obj?[name] is not JsonValue value) return fallback;
         if (value.TryGetValue<int>(out var integer)) return integer;
-        return value.TryGetValue<long>(out var longer) && longer <= int.MaxValue ? (int)longer : 0;
+        return value.TryGetValue<long>(out var longer) && longer <= int.MaxValue ? (int)longer : fallback;
     }
     private static string LinkMlPrimitive(string range) => range.ToLowerInvariant() switch
     {
@@ -379,7 +428,7 @@ internal sealed class SchemaConverter
         new() { Name = name, Type = type, Description = description, Required = required, Many = many, IsReference = reference };
     private static bool LooksLikeSchema(JsonObject o) => o.ContainsKey("$schema") || o.ContainsKey("$defs") || o.ContainsKey("definitions") || o.ContainsKey("properties") || o.ContainsKey("allOf");
     private static bool LooksLikeLinkMl(JsonObject o) => o["classes"] is JsonObject || o["enums"] is JsonObject;
-    private static string? Text(JsonObject o, string key) => o[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+    private static string? Text(JsonObject? o, string key) => o?[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
     private static string ReferenceName(string value) => TypeName(Uri.UnescapeDataString(value.Split('/').Last()));
     private static string TypeName(string value) => string.Concat(Regex.Split(value, "[^A-Za-z0-9]+").Where(x => x.Length > 0).Select(x => char.ToUpperInvariant(x[0]) + x[1..]));
     private static string Singular(string value) => value.EndsWith("ies") ? value[..^3] + "y" : value.EndsWith("s") && value.Length > 1 ? value[..^1] : value;

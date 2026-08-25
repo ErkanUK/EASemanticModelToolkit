@@ -46,6 +46,7 @@ if (args.Length == 1)
     if (!inspectedTurtle.Contains("a owl:Ontology")) throw new InvalidOperationException("Turtle ontology declaration is missing.");
     Console.WriteLine($"Parsed and laid out {inspected.Name}: {inspected.Classes.Count} classes, {inspected.Enums.Count} enumerations, {inspected.Classes.Sum(x => x.Properties.Count)} properties/relationships, no overlaps.");
     Console.WriteLine("Classes: " + string.Join(", ", inspected.Classes.Select(x => x.Name)));
+    Console.WriteLine($"Associations: {inspected.Classes.SelectMany(x => x.Properties).Count(x => x.IsReference)} class-valued properties.");
     Console.WriteLine($"OWL exports validated: {inspectedXmlOntology.Length} RDF/XML characters, {inspectedTurtle.Length} Turtle characters.");
     var annotated = inspected.Classes.Where(x => x.DiagramDomains.Count > 0).ToList();
     Console.WriteLine($"Layout annotations: {annotated.Count}/{inspected.Classes.Count} classes annotated.");
@@ -129,6 +130,56 @@ var terminal = attributeModel.Classes.Single(x => x.Name == "Terminal");
 Assert(attributeModel.Classes.All(x => !x.Name.EndsWith("Attributes")), "attributes container is not a class");
 Assert(terminal.Properties.Any(x => x.Name == "description" && x.Type == "String" && !x.IsReference), "primitive attribute definition");
 Assert(terminal.Properties.Any(x => x.Name == "conductingEquipment" && x.Type == "ConductingEquipment" && x.IsReference && x.Required), "class range association definition");
+
+var reusableSlots = SimpleYaml.Parse("""
+classes:
+  IdentifiersMixin:
+    mixin: true
+    slots:
+      - external_id
+  Location:
+    slots:
+      - location_id
+  Asset:
+    mixins:
+      - IdentifiersMixin
+    slots:
+      - asset_id
+      - location_id
+      - tags
+    slot_usage:
+      asset_id:
+        identifier: true
+        description: Asset primary key
+      location_id:
+        range: Location
+        required: true
+      tags:
+        multivalued: true
+    source: curated.assets
+slots:
+  external_id:
+    range: string
+  location_id:
+    range: string
+  asset_id:
+    range: string
+  tags:
+    range: string
+""");
+var reusableSlotModel = new SchemaConverter().Convert(reusableSlots, "ReusableSlots");
+Assert(reusableSlotModel.Classes.Select(x => x.Name).Order().SequenceEqual(["Asset", "IdentifiersMixin", "Location"]),
+    "LinkML slots and slot_usage do not create spurious classes");
+var reusableAsset = reusableSlotModel.Classes.Single(x => x.Name == "Asset");
+Assert(reusableAsset.Parents.SequenceEqual(["IdentifiersMixin"]), "LinkML mixin becomes inheritance");
+Assert(reusableAsset.Properties.Single(x => x.Name == "asset_id") is { Type: "String", Identifier: true, Description: "Asset primary key" },
+    "slot_usage merges identifier and description with global slot");
+Assert(reusableAsset.Properties.Single(x => x.Name == "location_id") is { Type: "Location", IsReference: true, Required: true },
+    "slot_usage class range becomes required association");
+Assert(reusableAsset.Properties.Single(x => x.Name == "tags") is { Type: "String", Many: true },
+    "slot_usage cardinality overrides global slot");
+Assert(reusableSlotModel.Classes.Single(x => x.Name == "IdentifiersMixin").Properties.Single().Name == "external_id",
+    "mixin resolves its global slots");
 
 var namedEnums = JsonNode.Parse("""
 {

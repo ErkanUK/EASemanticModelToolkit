@@ -54,6 +54,8 @@ The toolkit intentionally uses a new COM and installer identity, so it can be te
 
 The importer supports LinkML YAML descriptions and comments written with folded or literal block scalars, including the standard chomping forms `>-`, `>+`, `|-`, and `|+`. These forms are supported both as mapping values and as list items such as `- >-`, so later classes and enumerations are not omitted during parsing.
 
+Reusable top-level `slots` are resolved when named in a class `slots` list. Per-class `slot_usage` values override range, description, identifier, required and cardinality metadata; a class-valued range becomes an EA association. LinkML `mixins` are represented as generalizations so their shared slots remain inherited rather than being misread as separate attribute classes.
+
 ## Updating an imported model
 
 Import the revised JSON or YAML while either its parent package or the previously imported model package is selected. When a package with the same model name exists, the confirmation dialog offers:
