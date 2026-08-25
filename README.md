@@ -50,6 +50,10 @@ Restart EA and open **Specialize > Add-Ins > Semantic Model Toolkit**.
 
 The toolkit intentionally uses a new COM and installer identity, so it can be tested alongside the legacy importer and exporter. Uninstall or disable the legacy add-ins once the combined toolkit is verified.
 
+## YAML compatibility
+
+The importer supports LinkML YAML descriptions and comments written with folded or literal block scalars, including the standard chomping forms `>-`, `>+`, `|-`, and `|+`. These forms are supported both as mapping values and as list items such as `- >-`, so later classes and enumerations are not omitted during parsing.
+
 ## Updating an imported model
 
 Import the revised JSON or YAML while either its parent package or the previously imported model package is selected. When a package with the same model name exists, the confirmation dialog offers:

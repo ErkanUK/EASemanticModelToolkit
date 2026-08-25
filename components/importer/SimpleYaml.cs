@@ -42,6 +42,13 @@ internal static class SimpleYaml
                     ? ParseBlock(lines, ref index, lines[index].Indent) : null);
                 continue;
             }
+            if (IsBlockScalar(content))
+            {
+                var parts = new List<string>();
+                while (index < lines.Count && lines[index].Indent > indent) parts.Add(lines[index++].Text);
+                array.Add(string.Join(content[0] == '>' ? " " : "\n", parts));
+                continue;
+            }
             if (FindColon(content) >= 0)
             {
                 var item = new JsonObject();
@@ -64,11 +71,11 @@ internal static class SimpleYaml
         if (colon < 0) throw new InvalidDataException("Invalid YAML mapping: " + text);
         string key = Unquote(text[..colon].Trim());
         string value = text[(colon + 1)..].Trim();
-        if (value is "|" or ">")
+        if (IsBlockScalar(value))
         {
             var parts = new List<string>();
             while (index < lines.Count && lines[index].Indent > indent) parts.Add(lines[index++].Text);
-            obj[key] = string.Join(value == ">" ? " " : "\n", parts);
+            obj[key] = string.Join(value[0] == '>' ? " " : "\n", parts);
         }
         else if (value.Length > 0) obj[key] = Scalar(value);
         else if (index < lines.Count && lines[index].Indent > indent)
@@ -122,6 +129,11 @@ internal static class SimpleYaml
         }
         return -1;
     }
+
+    private static bool IsBlockScalar(string value) =>
+        value.Length is 1 or 2
+        && value[0] is '|' or '>'
+        && (value.Length == 1 || value[1] is '-' or '+');
 
     private static string Unquote(string value) => value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')) ? value[1..^1] : value;
     private readonly record struct Line(int Indent, string Text);

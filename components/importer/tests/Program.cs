@@ -1,6 +1,36 @@
 using System.Text.Json.Nodes;
 using EAJsonModelImporter;
 
+var chompingLinkMl = new SchemaConverter().Convert(SimpleYaml.Parse("""
+title: Chomping LinkML
+description: >-
+  Folded model description.
+enums:
+  Status:
+    description: >-
+      Folded enum description.
+    permissible_values:
+      ACTIVE:
+        description: "Active"
+classes:
+  First:
+    description: |-
+      Literal class description.
+    comments:
+      - >-
+        Folded list item that must not consume the next class.
+    attributes:
+      status:
+        range: Status
+  Second:
+    description: >+
+      Another folded description.
+"""), "fallback");
+Assert(chompingLinkMl.Classes.Select(x => x.Name).Order().SequenceEqual(["First", "Second"]),
+    "YAML block chomping indicators preserve following LinkML classes");
+Assert(chompingLinkMl.Enums.Single().Name == "Status",
+    "YAML block chomping indicators preserve LinkML enumerations");
+
 if (args.Length == 1)
 {
     string path = Path.GetFullPath(args[0]);
@@ -15,6 +45,7 @@ if (args.Length == 1)
     string inspectedTurtle = OwlSerializer.Serialize(inspected, OwlSerialization.Turtle);
     if (!inspectedTurtle.Contains("a owl:Ontology")) throw new InvalidOperationException("Turtle ontology declaration is missing.");
     Console.WriteLine($"Parsed and laid out {inspected.Name}: {inspected.Classes.Count} classes, {inspected.Enums.Count} enumerations, {inspected.Classes.Sum(x => x.Properties.Count)} properties/relationships, no overlaps.");
+    Console.WriteLine("Classes: " + string.Join(", ", inspected.Classes.Select(x => x.Name)));
     Console.WriteLine($"OWL exports validated: {inspectedXmlOntology.Length} RDF/XML characters, {inspectedTurtle.Length} Turtle characters.");
     var annotated = inspected.Classes.Where(x => x.DiagramDomains.Count > 0).ToList();
     Console.WriteLine($"Layout annotations: {annotated.Count}/{inspected.Classes.Count} classes annotated.");
