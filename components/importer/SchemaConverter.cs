@@ -25,6 +25,7 @@ internal sealed class SchemaConverter
             LinkMlDefaultPrefix = Text(obj, "default_prefix") ?? ""
         };
         ParseLinkMlSchemaMetadata(obj);
+        PreserveAnnotations("schema", obj["annotations"]);
         ParseModelAnnotations(obj["annotations"] as JsonObject);
 
         DiscoverEnums(obj);
@@ -161,9 +162,13 @@ internal sealed class SchemaConverter
         if (definition["permissible_values"] is not JsonObject values) return;
         AddEnum(name, Text(definition, "description") ?? "", values.Select(x => x.Key));
         var item = _enums[TypeName(name)];
+        PreserveAnnotations("enum:" + item.Name, definition["annotations"]);
         foreach (var (value, node) in values)
-            if (node is JsonObject details && Text(details, "description") is { } description)
-                item.ValueDescriptions[value] = description;
+            if (node is JsonObject details)
+            {
+                if (Text(details, "description") is { } description) item.ValueDescriptions[value] = description;
+                PreserveAnnotations("enumvalue:" + item.Name + "." + value, details["annotations"]);
+            }
     }
 
     private void AddEnum(string name, string description, IEnumerable<string> values)
@@ -268,6 +273,7 @@ internal sealed class SchemaConverter
             foreach (string mixin in mixins.Select(x => x?.ToString() ?? "").Where(x => x.Length > 0))
                 if (!cls.Parents.Contains(TypeName(mixin))) cls.Parents.Add(TypeName(mixin));
         if (obj["slots"] is JsonArray slots) ParseSlotReferences(cls, slots, obj["slot_usage"] as JsonObject);
+        PreserveAnnotations("class:" + cls.Name, obj["annotations"]);
         ParseDiagramAnnotations(cls, obj["annotations"] as JsonObject);
         foreach (var (propertyName, value) in obj)
         {
@@ -352,6 +358,7 @@ internal sealed class SchemaConverter
             var property = Property(name, primitive.Length == 0 ? namedType : primitive,
                 Text(definition, "description") ?? "", required, many, reference, bounds.Lower, bounds.Upper);
             property.Identifier = Boolean(definition, "identifier");
+            PreserveAnnotations("attribute:" + cls.Name + "." + name, definition["annotations"]);
             cls.Properties.Add(property);
         }
     }
@@ -375,6 +382,8 @@ internal sealed class SchemaConverter
                 Text(usage, "description") ?? Text(definition, "description") ?? "", required, many, reference,
                 bounds.Lower, bounds.Upper);
             property.Identifier = Boolean(usage, "identifier", Boolean(definition, "identifier"));
+            PreserveAnnotations("attribute:" + cls.Name + "." + slotName,
+                usage?["annotations"] ?? definition?["annotations"]);
             AddOrReplaceProperty(cls, property);
         }
     }
@@ -507,6 +516,10 @@ internal sealed class SchemaConverter
             IsReference = reference, LowerBound = lower, UpperBound = upper };
     private static bool LooksLikeSchema(JsonObject o) => o.ContainsKey("$schema") || o.ContainsKey("$defs") || o.ContainsKey("definitions") || o.ContainsKey("properties") || o.ContainsKey("allOf");
     private static bool LooksLikeLinkMl(JsonObject o) => o["classes"] is JsonObject || o["enums"] is JsonObject;
+    private void PreserveAnnotations(string key, JsonNode? annotations)
+    {
+        if (annotations is not null) _model.LinkMlAnnotations[key] = annotations.ToJsonString();
+    }
     private static string? Text(JsonObject? o, string key) => o?[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
     private static string ReferenceName(string value) => TypeName(Uri.UnescapeDataString(value.Split('/').Last()));
     private static string TypeName(string value) => string.Concat(Regex.Split(value, "[^A-Za-z0-9]+").Where(x => x.Length > 0).Select(x => char.ToUpperInvariant(x[0]) + x[1..]));

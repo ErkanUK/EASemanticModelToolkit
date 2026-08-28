@@ -85,6 +85,12 @@ The importer supports LinkML YAML descriptions and comments written with folded 
 
 Reusable top-level `slots` are resolved when named in a class `slots` list. Per-class `slot_usage` values override range, description, identifier, required and cardinality metadata; a class-valued range becomes an EA association. LinkML `mixins` are represented as generalizations so their shared slots remain inherited rather than being misread as separate attribute classes.
 
+LinkML association export follows EA connector navigability. The navigable end supplies the LinkML attribute name and cardinality; non-navigable inverse ends are not generated. Connectors imported by older toolkit versions, which did not set navigability explicitly, fall back to their original EA client-to-supplier direction. New imports mark the supplier end navigable so role names such as `maximo_assets` and multiplicities such as `0..*` round-trip consistently.
+
+Full-line YAML comments and LinkML `annotations` are retained as metadata on packages imported with this version and restored on later LinkML exports. Comments are emitted together at the beginning of the exported file because YAML comments do not have a semantic location in the parsed model. Metadata already discarded by an older importer cannot be reconstructed automatically from an existing EA package.
+
+For an existing manually improved EA model, select its package and choose **Attach LinkML comments and annotations...**. Select the earlier LinkML YAML as the metadata source. This updates only package metadata; it does not import or update classes, attributes, connectors, or diagrams. The next LinkML export combines the current EA model with the retained comments and annotations.
+
 ## Updating an imported model
 
 Import the revised JSON or YAML while either its parent package or the previously imported model package is selected. When a package with the same model name exists, the confirmation dialog offers:

@@ -11,6 +11,8 @@ internal sealed class ImportModel
     public Dictionary<string, string> LinkMlPrefixes { get; } = new(StringComparer.Ordinal);
     public List<string> LinkMlImports { get; } = [];
     public List<string> UnsupportedLinkMlFeatures { get; } = [];
+    public string SourceComments { get; set; } = "";
+    public Dictionary<string, string> LinkMlAnnotations { get; } = new(StringComparer.Ordinal);
     public List<ImportClass> Classes { get; } = [];
     public List<ImportEnum> Enums { get; } = [];
     public Dictionary<string, string> DiagramDomainColors { get; } = new(StringComparer.OrdinalIgnoreCase);

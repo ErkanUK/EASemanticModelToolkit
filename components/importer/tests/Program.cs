@@ -330,6 +330,8 @@ Assert(diagramAsset.DiagramDomains.SequenceEqual(["asset_health"]), "array EA di
 Assert(diagramAsset.DiagramOrder == 10, "second EA diagram order");
 Assert(diagramModel.DiagramDomainColors["network_spine"] == "#DDEBF7", "EA domain colour annotation");
 Assert(diagramModel.DiagramDomainColors["asset_health"] == "#FFF2CC", "second EA domain colour annotation");
+Assert(diagramModel.LinkMlAnnotations.ContainsKey("schema") &&
+       diagramModel.LinkMlAnnotations.ContainsKey("class:Transformer"), "LinkML annotations are retained for export");
 var sparxAnnotations = SimpleYaml.Parse("""
 classes:
   Substation:

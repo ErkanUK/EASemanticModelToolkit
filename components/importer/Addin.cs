@@ -11,6 +11,7 @@ public sealed class Addin
 {
     private const string Menu = "-&JSON/YAML Model Importer";
     private const string ImportItem = "Import into selected package...";
+    private const string AttachMetadataItem = "Attach LinkML comments and annotations...";
     private const string AboutItem = "About JSON/YAML Model Importer";
 
     public string EA_Connect(EA.Repository repository) => "EAJsonModelImporter";
@@ -18,7 +19,7 @@ public sealed class Addin
     public object EA_GetMenuItems(EA.Repository repository, string location, string menuName) => menuName switch
     {
         "" => Menu,
-        Menu => new[] { ImportItem, AboutItem },
+        Menu => new[] { ImportItem, AttachMetadataItem, AboutItem },
         _ => ""
     };
 
@@ -33,8 +34,37 @@ public sealed class Addin
     {
         if (itemName == AboutItem)
         {
-            MessageBox.Show("Imports JSON, JSON Schema, and YAML as an editable UML class model. LinkML ea_domains annotations generate structured overview and domain diagrams.",
+            MessageBox.Show("Imports JSON, JSON Schema, and YAML as an editable UML class model. LinkML ea_domains annotations generate structured overview and domain diagrams. Comments and annotations can also be attached to an existing package without changing its model or diagrams.",
                 "EA JSON/YAML Model Importer", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (itemName == AttachMetadataItem)
+        {
+            var package = SelectedPackage(repository);
+            if (package is null) return;
+            using var metadataDialog = new OpenFileDialog
+            {
+                Title = "Choose the source LinkML YAML whose comments and annotations should be retained",
+                Filter = "LinkML YAML|*.yaml;*.yml|All files|*.*"
+            };
+            if (metadataDialog.ShowDialog() != DialogResult.OK) return;
+            try
+            {
+                var metadataModel = new SchemaConverter().Convert(InputLoader.Load(metadataDialog.FileName),
+                    Path.GetFileNameWithoutExtension(metadataDialog.FileName));
+                metadataModel.SourceComments = InputLoader.ExtractYamlComments(metadataDialog.FileName);
+                EaModelWriter.WriteLinkMlMetadata(package, metadataModel);
+                MessageBox.Show($"Metadata attached to '{package.Name}'.\n\n" +
+                    $"{metadataModel.SourceComments.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length} comment lines and " +
+                    $"{metadataModel.LinkMlAnnotations.Count} annotation blocks will be restored during LinkML export.\n\n" +
+                    "Classes, attributes, connectors and diagrams were not changed.",
+                    "LinkML metadata attached", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Metadata attachment failed:\n" + ex.Message, "EA JSON/YAML Model Importer",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
             return;
         }
         if (itemName != ImportItem) return;
@@ -55,6 +85,7 @@ public sealed class Addin
         {
             var root = InputLoader.Load(dialog.FileName);
             var model = new SchemaConverter().Convert(root, Path.GetFileNameWithoutExtension(dialog.FileName));
+            model.SourceComments = InputLoader.ExtractYamlComments(dialog.FileName);
             if (model.UnsupportedLinkMlFeatures.Count > 0)
             {
                 string features = string.Join("\r\n", model.UnsupportedLinkMlFeatures.Select(x => "• " + x));

@@ -10,6 +10,8 @@ internal sealed class ModelSnapshot
     public string LinkMlDefaultPrefix { get; init; } = "";
     public Dictionary<string, string> LinkMlPrefixes { get; } = new(StringComparer.Ordinal);
     public List<string> LinkMlImports { get; } = [];
+    public string SourceComments { get; init; } = "";
+    public Dictionary<string, string> LinkMlAnnotations { get; } = new(StringComparer.Ordinal);
     public List<UmlClass> Classes { get; } = [];
     public List<UmlEnum> Enums { get; } = [];
     public List<UmlRelation> Relations { get; } = [];
@@ -67,5 +69,7 @@ internal sealed class UmlRelation
     public required string TargetMultiplicity { get; init; }
     public required string Notes { get; init; }
     public bool Composition { get; init; }
+    public bool SourceNavigable { get; init; }
+    public bool TargetNavigable { get; init; }
     public string LineColor { get; init; } = "#475569";
 }

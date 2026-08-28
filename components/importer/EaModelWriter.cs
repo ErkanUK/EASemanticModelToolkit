@@ -58,6 +58,8 @@ internal static class EaModelWriter
                     connector.SupplierID = targetElement.ElementID;
                     connector.SupplierEnd.Role = property.Name;
                     connector.SupplierEnd.Cardinality = Cardinality(property);
+                    connector.SupplierEnd.Navigable = "Navigable";
+                    connector.ClientEnd.Navigable = "Non-Navigable";
                     connector.Notes = property.Description;
                     connector.Update();
                     continue;
@@ -101,7 +103,7 @@ internal static class EaModelWriter
         return package;
     }
 
-    private static void WriteLinkMlMetadata(EA.Package package, ImportModel model)
+    public static void WriteLinkMlMetadata(EA.Package package, ImportModel model)
     {
         var element = package.Element;
         SetTaggedValue(element, "LinkML.id", model.OntologyIri);
@@ -109,6 +111,8 @@ internal static class EaModelWriter
         SetTaggedValue(element, "LinkML.default_prefix", model.LinkMlDefaultPrefix);
         SetTaggedValue(element, "LinkML.prefixes", System.Text.Json.JsonSerializer.Serialize(model.LinkMlPrefixes));
         SetTaggedValue(element, "LinkML.imports", System.Text.Json.JsonSerializer.Serialize(model.LinkMlImports));
+        SetTaggedValue(element, "LinkML.comments", model.SourceComments);
+        SetTaggedValue(element, "LinkML.annotations", System.Text.Json.JsonSerializer.Serialize(model.LinkMlAnnotations));
         element.TaggedValues.Refresh();
     }
 

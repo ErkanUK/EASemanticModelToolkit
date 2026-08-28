@@ -9,8 +9,11 @@ var model = new ModelSnapshot
     Name = "People Model",
     Version = "3.1",
     Notes = "People & organisations",
-    OntologyIri = "https://example.org/people"
+    OntologyIri = "https://example.org/people",
+    SourceComments = "# Preserved model comment"
 };
+model.LinkMlAnnotations["schema"] = "{\"source\":\"curated\"}";
+model.LinkMlAnnotations["class:Person"] = "{\"domain\":\"People\"}";
 model.LinkMlPrefixes["people"] = "https://example.org/people/";
 model.LinkMlPrefixes["linkml"] = "https://w3id.org/linkml/";
 model.LinkMlImports.AddRange(["linkml:types", "https://example.org/common"]);
@@ -54,7 +57,13 @@ model.Relations.Add(new UmlRelation
 {
     Kind = "Association", SourceId = 2, TargetId = 1, SourceName = "Employee", TargetName = "Person",
     SourceRole = "reports", TargetRole = "manager", SourceMultiplicity = "0..*", TargetMultiplicity = "0..1",
-    Notes = "Line management", Composition = false
+    Notes = "Line management", Composition = false, TargetNavigable = true
+});
+model.Relations.Add(new UmlRelation
+{
+    Kind = "Association", SourceId = 1, TargetId = 4, SourceName = "Person", TargetName = "PartyMixin",
+    SourceRole = "people", TargetRole = "maximo_assets", SourceMultiplicity = "0..1", TargetMultiplicity = "0..*",
+    Notes = "Preserved navigable collection", Composition = false, TargetNavigable = true
 });
 
 string turtle = OwlWriter.WriteTurtle(model);
@@ -93,6 +102,14 @@ Assert(linkMl.Contains("people: \"https://example.org/people/\""), "LinkML prefi
 Assert(linkMl.Contains("- \"https://example.org/common\""), "LinkML imports are preserved");
 Assert(linkMl.Contains("identifier: true"), "LinkML identifier is exported");
 Assert(linkMl.Contains("description: \"Currently employed\""), "LinkML enum value description is exported");
+Assert(linkMl.StartsWith("# Preserved model comment"), "LinkML comments are preserved");
+Assert(linkMl.Contains("annotations: {\"source\":\"curated\"}"), "LinkML schema annotations are preserved");
+Assert(linkMl.Contains("annotations: {\"domain\":\"People\"}"), "LinkML class annotations are preserved");
+Assert(linkMl.Contains("      manager:\n") || linkMl.Contains("      manager:\r\n"), "navigable role name is retained");
+Assert(!linkMl.Contains("      reports:"), "non-navigable inverse association is not exported");
+Assert(linkMl.Contains("      maximo_assets:") && linkMl.Replace("\r", "").Contains("description: \"Preserved navigable collection\"\n        multivalued: true"),
+    "navigable role and 0..* cardinality are retained");
+Assert(!linkMl.Contains("      people:"), "collection inverse association is not exported");
 
 string plantUml = PlantUmlWriter.Write(model);
 Assert(plantUml.StartsWith("@startuml"), "PlantUML document start");

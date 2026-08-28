@@ -18,11 +18,14 @@ internal static class EaModelReader
                 "urn:ea:model:" + (string.IsNullOrWhiteSpace(root.PackageGUID)
                     ? Uri.EscapeDataString(root.Name) : root.PackageGUID.Trim('{', '}')),
             LinkMlName = Tag(linkMlTags, "LinkML.name"),
-            LinkMlDefaultPrefix = Tag(linkMlTags, "LinkML.default_prefix")
+            LinkMlDefaultPrefix = Tag(linkMlTags, "LinkML.default_prefix"),
+            SourceComments = Tag(linkMlTags, "LinkML.comments")
         };
         foreach (var item in Deserialize<Dictionary<string, string>>(Tag(linkMlTags, "LinkML.prefixes")) ?? [])
             model.LinkMlPrefixes[item.Key] = item.Value;
         model.LinkMlImports.AddRange(Deserialize<List<string>>(Tag(linkMlTags, "LinkML.imports")) ?? []);
+        foreach (var item in Deserialize<Dictionary<string, string>>(Tag(linkMlTags, "LinkML.annotations")) ?? [])
+            model.LinkMlAnnotations[item.Key] = item.Value;
         ReadPackage(repository, root, root.Name, model, appearances.Elements);
         ReadRelations(repository, model, appearances.Connectors);
         return model;
@@ -129,6 +132,8 @@ internal static class EaModelReader
                     TargetMultiplicity = DefaultMultiplicity(connector.SupplierEnd.Cardinality),
                     Notes = CleanNotes(connector.Notes),
                     Composition = connector.ClientEnd.Aggregation == 2 || connector.SupplierEnd.Aggregation == 2,
+                    SourceNavigable = IsNavigable(connector.ClientEnd.Navigable),
+                    TargetNavigable = IsNavigable(connector.SupplierEnd.Navigable),
                     LineColor = connectorColors.TryGetValue(Convert.ToInt32(connector.ConnectorID), out var lineColor)
                         ? lineColor : "#475569"
                 });
@@ -144,6 +149,8 @@ internal static class EaModelReader
         element.Stereotype.Equals("enumeration", StringComparison.OrdinalIgnoreCase);
 
     private static string DefaultMultiplicity(string value) => string.IsNullOrWhiteSpace(value) ? "0..1" : value;
+    private static bool IsNavigable(string? value) =>
+        value?.Equals("Navigable", StringComparison.OrdinalIgnoreCase) == true;
 
     private static Dictionary<string, string> ReadLinkMlTags(EA.Package package)
     {

@@ -12,4 +12,11 @@ internal static class InputLoader
 
         return SimpleYaml.Parse(text);
     }
+
+    public static string ExtractYamlComments(string path)
+    {
+        if (Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase)) return "";
+        return string.Join("\n", File.ReadLines(path)
+            .Where(line => line.TrimStart().StartsWith('#')));
+    }
 }

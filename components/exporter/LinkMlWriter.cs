@@ -14,11 +14,17 @@ internal static class LinkMlWriter
         var mixinNames = model.Classes.SelectMany(x => x.Parents.Skip(1))
             .Select(Identifier).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var b = new StringBuilder();
+        if (model.SourceComments.Length > 0)
+        {
+            b.AppendLine(model.SourceComments.TrimEnd());
+            b.AppendLine();
+        }
         b.AppendLine("id: " + Scalar(model.OntologyIri.Length > 0 ? model.OntologyIri : "https://example.org/" + schemaName));
         b.AppendLine("name: " + Scalar(schemaName));
         if (!model.Name.Equals(schemaName, StringComparison.Ordinal)) b.AppendLine("title: " + Scalar(model.Name));
         if (model.Version.Length > 0) b.AppendLine("version: " + Scalar(model.Version));
         if (model.Notes.Length > 0) b.AppendLine("description: " + Scalar(model.Notes));
+        WriteAnnotations(b, 0, Annotation(model, "schema"));
         b.AppendLine("prefixes:");
         var prefixes = model.LinkMlPrefixes.Count > 0
             ? model.LinkMlPrefixes
@@ -37,12 +43,14 @@ internal static class LinkMlWriter
             {
                 b.AppendLine("  " + Identifier(item.Name) + ":");
                 if (item.Notes.Length > 0) b.AppendLine("    description: " + Scalar(item.Notes));
+                WriteAnnotations(b, 4, Annotation(model, "enum:" + item.Name));
                 b.AppendLine("    permissible_values:");
                 foreach (var value in item.Values)
                 {
                     b.AppendLine("      " + Scalar(value) + ":");
                     if (item.ValueDescriptions.TryGetValue(value, out var description) && description.Length > 0)
                         b.AppendLine("        description: " + Scalar(description));
+                    WriteAnnotations(b, 8, Annotation(model, "enumvalue:" + item.Name + "." + value));
                 }
             }
         }
@@ -52,6 +60,7 @@ internal static class LinkMlWriter
         {
             b.AppendLine("  " + Identifier(cls.Name) + ":");
             if (cls.Notes.Length > 0) b.AppendLine("    description: " + Scalar(cls.Notes));
+            WriteAnnotations(b, 4, Annotation(model, "class:" + cls.Name));
             if (!string.IsNullOrWhiteSpace(cls.Version)) b.AppendLine("    version: " + Scalar(cls.Version));
             if (cls.Abstract) b.AppendLine("    abstract: true");
             if (mixinNames.Contains(Identifier(cls.Name))) b.AppendLine("    mixin: true");
@@ -62,13 +71,14 @@ internal static class LinkMlWriter
                 foreach (var parent in cls.Parents.Skip(1)) b.AppendLine("      - " + Identifier(parent));
             }
 
-            var associations = model.Relations.Where(x => x.SourceId == cls.Id || x.TargetId == cls.Id).ToList();
+            var associations = model.Relations.Where(x => IsExportedDirection(x, cls.Id)).ToList();
             if (cls.Properties.Count == 0 && associations.Count == 0) continue;
             b.AppendLine("    attributes:");
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in cls.Properties)
                 WriteAttribute(b, Unique(property.Name, names), property.Type, property.Notes, property.Lower,
-                    property.Upper, property.ReadOnly, property.Identifier, declaredRanges);
+                    property.Upper, property.ReadOnly, property.Identifier, declaredRanges,
+                    Annotation(model, "attribute:" + cls.Name + "." + property.Name));
             foreach (var relation in associations)
             {
                 bool forward = relation.SourceId == cls.Id;
@@ -76,14 +86,15 @@ internal static class LinkMlWriter
                 string other = forward ? relation.TargetName : relation.SourceName;
                 string multiplicity = forward ? relation.TargetMultiplicity : relation.SourceMultiplicity;
                 WriteAttribute(b, Unique(string.IsNullOrWhiteSpace(role) ? LowerCamel(other) : role, names), other, relation.Notes,
-                    Lower(multiplicity), Upper(multiplicity), false, false, declaredRanges);
+                    Lower(multiplicity), Upper(multiplicity), false, false, declaredRanges,
+                    Annotation(model, "attribute:" + cls.Name + "." + role));
             }
         }
         return b.ToString();
     }
 
     private static void WriteAttribute(StringBuilder b, string name, string type, string notes, string lower,
-        string upper, bool readOnly, bool identifier, IReadOnlySet<string> declaredRanges)
+        string upper, bool readOnly, bool identifier, IReadOnlySet<string> declaredRanges, string annotations = "")
     {
         b.AppendLine("      " + Identifier(name) + ":");
         b.AppendLine("        range: " + Range(type, declaredRanges));
@@ -95,6 +106,25 @@ internal static class LinkMlWriter
         if (many && int.TryParse(upper, out max)) b.AppendLine("        maximum_cardinality: " + max);
         if (readOnly) b.AppendLine("        readonly: true");
         if (identifier) b.AppendLine("        identifier: true");
+        WriteAnnotations(b, 8, annotations);
+    }
+
+    private static bool IsExportedDirection(UmlRelation relation, short classId)
+    {
+        // EA stores the role/cardinality for Client -> Supplier on SupplierEnd.
+        // Explicit navigability wins. Older toolkit imports did not set navigability,
+        // so an unspecified connector safely falls back to Client -> Supplier only.
+        if (classId == relation.SourceId)
+            return relation.TargetNavigable || (!relation.SourceNavigable && !relation.TargetNavigable);
+        return classId == relation.TargetId && relation.SourceNavigable;
+    }
+
+    private static string Annotation(ModelSnapshot model, string key) =>
+        model.LinkMlAnnotations.TryGetValue(key, out var value) ? value : "";
+
+    private static void WriteAnnotations(StringBuilder b, int indent, string json)
+    {
+        if (json.Length > 0) b.Append(' ', indent).Append("annotations: ").AppendLine(json);
     }
 
     private static string Range(string type, IReadOnlySet<string> declaredRanges)
