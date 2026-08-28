@@ -18,6 +18,7 @@ internal static class EaModelWriter
         package.Notes = model.Description;
         if (model.Version.Length > 0) package.Version = model.Version;
         package.Update();
+        WriteLinkMlMetadata(package, model);
 
         var elements = updating
             ? ExistingElements(package)
@@ -67,8 +68,8 @@ internal static class EaModelWriter
                 attribute.Type = property.Type;
                 attribute.Notes = property.Description;
                 attribute.IsID = property.Identifier;
-                attribute.LowerBound = property.Required ? "1" : "0";
-                attribute.UpperBound = property.Many ? "*" : "1";
+                attribute.LowerBound = property.LowerBound.Length > 0 ? property.LowerBound : property.Required ? "1" : "0";
+                attribute.UpperBound = property.UpperBound.Length > 0 ? property.UpperBound : property.Many ? "*" : "1";
                 if (elements.TryGetValue(property.Type, out var classifier)) attribute.ClassifierID = classifier.ElementID;
                 attribute.Update();
             }
@@ -98,6 +99,36 @@ internal static class EaModelWriter
         package.Update();
         target.Packages.Refresh();
         return package;
+    }
+
+    private static void WriteLinkMlMetadata(EA.Package package, ImportModel model)
+    {
+        var element = package.Element;
+        SetTaggedValue(element, "LinkML.id", model.OntologyIri);
+        SetTaggedValue(element, "LinkML.name", model.LinkMlName);
+        SetTaggedValue(element, "LinkML.default_prefix", model.LinkMlDefaultPrefix);
+        SetTaggedValue(element, "LinkML.prefixes", System.Text.Json.JsonSerializer.Serialize(model.LinkMlPrefixes));
+        SetTaggedValue(element, "LinkML.imports", System.Text.Json.JsonSerializer.Serialize(model.LinkMlImports));
+        element.TaggedValues.Refresh();
+    }
+
+    private static void SetTaggedValue(EA.Element element, string name, string value)
+    {
+        EA.TaggedValue? tag = null;
+        foreach (EA.TaggedValue existing in element.TaggedValues)
+            if (existing.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) { tag = existing; break; }
+        tag ??= (EA.TaggedValue)element.TaggedValues.AddNew(name, "");
+        if (value.Length > 255)
+        {
+            tag.Value = "<memo>";
+            tag.Notes = value;
+        }
+        else
+        {
+            tag.Value = value;
+            tag.Notes = "";
+        }
+        tag.Update();
     }
 
     private static Dictionary<string, EA.Element> ExistingElements(EA.Package package)
@@ -309,9 +340,12 @@ internal static class EaModelWriter
         return red | (green << 8) | (blue << 16);
     }
 
-    private static string Cardinality(ImportProperty property) => property.Many
-        ? (property.Required ? "1..*" : "0..*")
-        : (property.Required ? "1" : "0..1");
+    private static string Cardinality(ImportProperty property)
+    {
+        string lower = property.LowerBound.Length > 0 ? property.LowerBound : property.Required ? "1" : "0";
+        string upper = property.UpperBound.Length > 0 ? property.UpperBound : property.Many ? "*" : "1";
+        return lower == upper ? lower : lower + ".." + upper;
+    }
 
     private static string UniquePackageName(EA.Package target, string desired)
     {

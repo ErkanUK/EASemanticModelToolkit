@@ -13,14 +13,18 @@ internal sealed class SchemaConverter
     public ImportModel Convert(JsonNode root, string fallbackName)
     {
         var obj = root as JsonObject ?? throw new InvalidDataException("The root must be an object.");
-        string name = TypeName(Text(obj, "title") ?? fallbackName);
+        string linkMlName = Text(obj, "name") ?? "";
+        string name = TypeName(Text(obj, "title") ?? (linkMlName.Length > 0 ? linkMlName : fallbackName));
         _model = new ImportModel
         {
             Name = name,
             Description = Text(obj, "description") ?? "",
             Version = Text(obj, "version") ?? Text(obj, "$version") ?? "",
-            OntologyIri = Text(obj, "id") ?? Text(obj, "$id") ?? ""
+            OntologyIri = Text(obj, "id") ?? Text(obj, "$id") ?? "",
+            LinkMlName = linkMlName,
+            LinkMlDefaultPrefix = Text(obj, "default_prefix") ?? ""
         };
+        ParseLinkMlSchemaMetadata(obj);
         ParseModelAnnotations(obj["annotations"] as JsonObject);
 
         DiscoverEnums(obj);
@@ -60,12 +64,71 @@ internal sealed class SchemaConverter
     private void ConvertLinkMl(JsonObject root)
     {
         if (root["classes"] is not JsonObject classes) return;
+        FindUnsupportedLinkMlFeatures(root);
         _linkMlSlots = root["slots"] as JsonObject;
         foreach (var (name, node) in classes)
             if (node is JsonObject) GetClass(TypeName(name));
         foreach (var (name, node) in classes)
             if (node is JsonObject definition)
                 InferObject(definition, TypeName(name), "");
+    }
+
+    private void ParseLinkMlSchemaMetadata(JsonObject root)
+    {
+        if (root["prefixes"] is JsonObject prefixes)
+            foreach (var (name, node) in prefixes)
+            {
+                string value = node switch
+                {
+                    JsonValue => node.ToString(),
+                    JsonObject definition => Text(definition, "prefix_reference") ?? Text(definition, "reference") ?? "",
+                    _ => ""
+                };
+                if (value.Length > 0) _model.LinkMlPrefixes[name] = value;
+            }
+        if (root["imports"] is JsonArray imports)
+            _model.LinkMlImports.AddRange(imports.Select(x => x?.ToString() ?? "").Where(x => x.Length > 0));
+    }
+
+    private void FindUnsupportedLinkMlFeatures(JsonObject root)
+    {
+        var found = new SortedSet<string>(StringComparer.Ordinal);
+        AddPresent(root, found, "types", "custom types");
+        AddPresent(root, found, "subsets", "subsets");
+        AddPresent(root, found, "default_range", "default_range");
+        AddPresent(root, found, "bindings", "schema bindings");
+        if (_model.LinkMlImports.Count > 1 || _model.LinkMlImports.Any(x => !x.Equals("linkml:types", StringComparison.OrdinalIgnoreCase)))
+            found.Add("external import resolution (imports are preserved but not loaded)");
+        if (root["classes"] is JsonObject classes)
+            foreach (var (_, node) in classes)
+                if (node is JsonObject cls)
+                {
+                    AddPresent(cls, found, "abstract", "abstract class markers");
+                    AddPresent(cls, found, "mixin", "mixin class markers");
+                    foreach (string key in new[] { "rules", "classification_rules", "slot_conditions", "union_of", "any_of", "all_of", "exactly_one_of", "none_of", "defining_slots", "tree_root" })
+                        AddPresent(cls, found, key, key);
+                    if (cls["attributes"] is JsonObject attributes)
+                        foreach (var (_, attribute) in attributes)
+                            if (attribute is JsonObject slot) FindUnsupportedSlotFeatures(slot, found);
+                    if (cls["slot_usage"] is JsonObject usages)
+                        foreach (var (_, usage) in usages)
+                            if (usage is JsonObject slot) FindUnsupportedSlotFeatures(slot, found);
+                }
+        if (root["slots"] is JsonObject slots)
+            foreach (var (_, node) in slots)
+                if (node is JsonObject slot) FindUnsupportedSlotFeatures(slot, found);
+        _model.UnsupportedLinkMlFeatures.AddRange(found);
+    }
+
+    private static void FindUnsupportedSlotFeatures(JsonObject slot, ISet<string> found)
+    {
+        foreach (string key in new[] { "is_a", "mixins", "slot_uri", "range_expression", "any_of", "all_of", "exactly_one_of", "none_of", "pattern", "structured_pattern", "minimum_value", "maximum_value", "unit", "values_from", "bindings", "inlined", "inlined_as_list", "array", "equals_expression" })
+            AddPresent(slot, found, key, "slot " + key);
+    }
+
+    private static void AddPresent(JsonObject obj, ISet<string> found, string key, string label)
+    {
+        if (obj[key] is not null) found.Add(label);
     }
 
     private void ParseDefinition(string name, JsonObject definition)
@@ -279,14 +342,15 @@ internal sealed class SchemaConverter
                 continue;
             }
             string range = Text(definition, "range") ?? Text(definition, "type") ?? "string";
-            bool required = Boolean(definition, "required") || Integer(definition, "minimum_cardinality") > 0;
-            bool many = Boolean(definition, "multivalued") || Integer(definition, "maximum_cardinality") > 1;
+            var bounds = CardinalityBounds(definition);
+            bool required = bounds.Lower != "0";
+            bool many = bounds.Upper == "*" || (int.TryParse(bounds.Upper, out int upper) && upper > 1);
             string primitive = LinkMlPrimitive(range);
             string namedType = TypeName(range);
             bool isEnum = _enums.ContainsKey(namedType);
             bool reference = primitive.Length == 0 && !isEnum;
             var property = Property(name, primitive.Length == 0 ? namedType : primitive,
-                Text(definition, "description") ?? "", required, many, reference);
+                Text(definition, "description") ?? "", required, many, reference, bounds.Lower, bounds.Upper);
             property.Identifier = Boolean(definition, "identifier");
             cls.Properties.Add(property);
         }
@@ -300,16 +364,16 @@ internal sealed class SchemaConverter
             var usage = slotUsage?[slotName] as JsonObject;
             string range = Text(usage, "range") ?? Text(definition, "range")
                 ?? Text(usage, "type") ?? Text(definition, "type") ?? "string";
-            bool required = Boolean(usage, "required", Boolean(definition, "required"))
-                || Integer(usage, "minimum_cardinality", Integer(definition, "minimum_cardinality")) > 0;
-            bool many = Boolean(usage, "multivalued", Boolean(definition, "multivalued"))
-                || MaximumCardinalityIsMany(usage) || MaximumCardinalityIsMany(definition);
+            var bounds = CardinalityBounds(usage, definition);
+            bool required = bounds.Lower != "0";
+            bool many = bounds.Upper == "*" || (int.TryParse(bounds.Upper, out int upper) && upper > 1);
             string primitive = LinkMlPrimitive(range);
             string namedType = TypeName(range);
             bool isEnum = _enums.ContainsKey(namedType);
             bool reference = primitive.Length == 0 && !isEnum;
             var property = Property(slotName, primitive.Length == 0 ? namedType : primitive,
-                Text(usage, "description") ?? Text(definition, "description") ?? "", required, many, reference);
+                Text(usage, "description") ?? Text(definition, "description") ?? "", required, many, reference,
+                bounds.Lower, bounds.Upper);
             property.Identifier = Boolean(usage, "identifier", Boolean(definition, "identifier"));
             AddOrReplaceProperty(cls, property);
         }
@@ -328,6 +392,19 @@ internal sealed class SchemaConverter
         if (value.TryGetValue<int>(out int integer)) return integer > 1;
         string text = value.ToString();
         return text == "*" || (int.TryParse(text, out integer) && integer > 1);
+    }
+
+    private static (string Lower, string Upper) CardinalityBounds(JsonObject? primary, JsonObject? fallback = null)
+    {
+        int exact = Integer(primary, "exact_cardinality", Integer(fallback, "exact_cardinality", -1));
+        if (exact >= 0) return (exact.ToString(), exact.ToString());
+        int minimum = Integer(primary, "minimum_cardinality", Integer(fallback, "minimum_cardinality", -1));
+        int maximum = Integer(primary, "maximum_cardinality", Integer(fallback, "maximum_cardinality", -1));
+        bool required = Boolean(primary, "required", Boolean(fallback, "required"));
+        bool many = Boolean(primary, "multivalued", Boolean(fallback, "multivalued"));
+        string lower = minimum >= 0 ? minimum.ToString() : required ? "1" : "0";
+        string upper = maximum >= 0 ? maximum.ToString() : many ? "*" : "1";
+        return (lower, upper);
     }
 
     private static void MarkUniqueKeys(ImportClass cls, JsonObject uniqueKeys)
@@ -424,8 +501,10 @@ internal sealed class SchemaConverter
         _ => ""
     };
 
-    private static ImportProperty Property(string name, string type, string description, bool required, bool many, bool reference) =>
-        new() { Name = name, Type = type, Description = description, Required = required, Many = many, IsReference = reference };
+    private static ImportProperty Property(string name, string type, string description, bool required, bool many,
+        bool reference, string lower = "", string upper = "") =>
+        new() { Name = name, Type = type, Description = description, Required = required, Many = many,
+            IsReference = reference, LowerBound = lower, UpperBound = upper };
     private static bool LooksLikeSchema(JsonObject o) => o.ContainsKey("$schema") || o.ContainsKey("$defs") || o.ContainsKey("definitions") || o.ContainsKey("properties") || o.ContainsKey("allOf");
     private static bool LooksLikeLinkMl(JsonObject o) => o["classes"] is JsonObject || o["enums"] is JsonObject;
     private static string? Text(JsonObject? o, string key) => o?[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;

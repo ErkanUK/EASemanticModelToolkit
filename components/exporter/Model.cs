@@ -6,6 +6,10 @@ internal sealed class ModelSnapshot
     public required string Version { get; init; }
     public required string Notes { get; init; }
     public required string OntologyIri { get; init; }
+    public string LinkMlName { get; init; } = "";
+    public string LinkMlDefaultPrefix { get; init; } = "";
+    public Dictionary<string, string> LinkMlPrefixes { get; } = new(StringComparer.Ordinal);
+    public List<string> LinkMlImports { get; } = [];
     public List<UmlClass> Classes { get; } = [];
     public List<UmlEnum> Enums { get; } = [];
     public List<UmlRelation> Relations { get; } = [];
@@ -35,6 +39,7 @@ internal sealed class UmlEnum
     public string BorderColor { get; init; } = "#D6B656";
     public string FontColor { get; init; } = "#0F172A";
     public List<string> Values { get; } = [];
+    public Dictionary<string, string> ValueDescriptions { get; } = new(StringComparer.Ordinal);
 }
 
 internal sealed class UmlProperty

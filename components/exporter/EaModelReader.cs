@@ -8,14 +8,21 @@ internal static class EaModelReader
     public static ModelSnapshot Read(EA.Repository repository, EA.Package root)
     {
         var appearances = ReadAppearances(root);
+        var linkMlTags = ReadLinkMlTags(root);
         var model = new ModelSnapshot
         {
             Name = root.Name,
             Version = root.Version ?? "",
             Notes = CleanNotes(root.Notes),
-            OntologyIri = "urn:ea:model:" + (string.IsNullOrWhiteSpace(root.PackageGUID)
-                ? Uri.EscapeDataString(root.Name) : root.PackageGUID.Trim('{', '}'))
+            OntologyIri = Tag(linkMlTags, "LinkML.id") is { Length: > 0 } id ? id :
+                "urn:ea:model:" + (string.IsNullOrWhiteSpace(root.PackageGUID)
+                    ? Uri.EscapeDataString(root.Name) : root.PackageGUID.Trim('{', '}')),
+            LinkMlName = Tag(linkMlTags, "LinkML.name"),
+            LinkMlDefaultPrefix = Tag(linkMlTags, "LinkML.default_prefix")
         };
+        foreach (var item in Deserialize<Dictionary<string, string>>(Tag(linkMlTags, "LinkML.prefixes")) ?? [])
+            model.LinkMlPrefixes[item.Key] = item.Value;
+        model.LinkMlImports.AddRange(Deserialize<List<string>>(Tag(linkMlTags, "LinkML.imports")) ?? []);
         ReadPackage(repository, root, root.Name, model, appearances.Elements);
         ReadRelations(repository, model, appearances.Connectors);
         return model;
@@ -37,7 +44,11 @@ internal static class EaModelReader
                     FontColor = appearance?.Font ?? "#0F172A"
                 };
                 foreach (EA.Attribute attribute in element.Attributes)
+                {
                     item.Values.Add(attribute.Name);
+                    string notes = CleanNotes(attribute.Notes);
+                    if (notes.Length > 0) item.ValueDescriptions[attribute.Name] = notes;
+                }
                 model.Enums.Add(item);
                 continue;
             }
@@ -133,6 +144,29 @@ internal static class EaModelReader
         element.Stereotype.Equals("enumeration", StringComparison.OrdinalIgnoreCase);
 
     private static string DefaultMultiplicity(string value) => string.IsNullOrWhiteSpace(value) ? "0..1" : value;
+
+    private static Dictionary<string, string> ReadLinkMlTags(EA.Package package)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (EA.TaggedValue tag in package.Element.TaggedValues)
+                if (tag.Name.StartsWith("LinkML.", StringComparison.OrdinalIgnoreCase))
+                    result[tag.Name] = tag.Value == "<memo>" ? tag.Notes ?? "" : tag.Value ?? "";
+        }
+        catch { /* packages created outside this toolkit have no LinkML tags */ }
+        return result;
+    }
+
+    private static string Tag(IReadOnlyDictionary<string, string> tags, string name) =>
+        tags.TryGetValue(name, out var value) ? value : "";
+
+    private static T? Deserialize<T>(string value)
+    {
+        if (value.Length == 0) return default;
+        try { return System.Text.Json.JsonSerializer.Deserialize<T>(value); }
+        catch { return default; }
+    }
 
     private static AppearanceMaps ReadAppearances(EA.Package root)
     {

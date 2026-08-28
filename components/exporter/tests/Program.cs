@@ -11,6 +11,9 @@ var model = new ModelSnapshot
     Notes = "People & organisations",
     OntologyIri = "https://example.org/people"
 };
+model.LinkMlPrefixes["people"] = "https://example.org/people/";
+model.LinkMlPrefixes["linkml"] = "https://w3id.org/linkml/";
+model.LinkMlImports.AddRange(["linkml:types", "https://example.org/common"]);
 var person = new UmlClass
 {
     Id = 1, Name = "Person", QualifiedName = "Model::Person", Notes = "A person", Abstract = false
@@ -45,6 +48,7 @@ model.Classes.Add(new UmlClass
 });
 var status = new UmlEnum { Id = 3, Name = "Status", Notes = "Employment status" };
 status.Values.AddRange(["Active", "Inactive"]);
+status.ValueDescriptions["Active"] = "Currently employed";
 model.Enums.Add(status);
 model.Relations.Add(new UmlRelation
 {
@@ -84,6 +88,11 @@ Assert(!linkMl.Contains("range: unnamed"), "blank EA datatype does not create an
 Assert(!linkMl.Contains("range: Duration"), "undeclared EA custom datatype has a valid LinkML fallback");
 Assert(linkMl.Replace("\r", "").Contains("  PartyMixin:\n    abstract: true\n    mixin: true"),
     "secondary parent is declared as a LinkML mixin");
+Assert(linkMl.Contains("id: \"https://example.org/people\""), "LinkML ontology id is preserved");
+Assert(linkMl.Contains("people: \"https://example.org/people/\""), "LinkML prefixes are preserved");
+Assert(linkMl.Contains("- \"https://example.org/common\""), "LinkML imports are preserved");
+Assert(linkMl.Contains("identifier: true"), "LinkML identifier is exported");
+Assert(linkMl.Contains("description: \"Currently employed\""), "LinkML enum value description is exported");
 
 string plantUml = PlantUmlWriter.Write(model);
 Assert(plantUml.StartsWith("@startuml"), "PlantUML document start");

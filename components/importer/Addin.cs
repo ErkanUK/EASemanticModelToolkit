@@ -55,6 +55,14 @@ public sealed class Addin
         {
             var root = InputLoader.Load(dialog.FileName);
             var model = new SchemaConverter().Convert(root, Path.GetFileNameWithoutExtension(dialog.FileName));
+            if (model.UnsupportedLinkMlFeatures.Count > 0)
+            {
+                string features = string.Join("\r\n", model.UnsupportedLinkMlFeatures.Select(x => "• " + x));
+                if (MessageBox.Show("This LinkML file uses features that are not fully represented in EA:\r\n\r\n" +
+                        features + "\r\n\r\nSupported model content can still be imported. Continue?",
+                        "LinkML import limitations", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+            }
             int domainCount = model.Classes.SelectMany(x => x.DiagramDomains).Distinct(StringComparer.OrdinalIgnoreCase).Count();
             string diagramSummary = domainCount > 0 ? $", {domainCount} structured domain diagrams" : ", one smart diagram";
             var existingPackage = EaModelWriter.FindExistingPackage(target, model.Name);

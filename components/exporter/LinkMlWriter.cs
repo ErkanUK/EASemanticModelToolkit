@@ -7,23 +7,28 @@ internal static class LinkMlWriter
 {
     public static string Write(ModelSnapshot model)
     {
-        var schemaName = Identifier(model.Name);
+        var schemaName = Identifier(model.LinkMlName.Length > 0 ? model.LinkMlName : model.Name);
         var declaredRanges = model.Classes.Select(x => Identifier(x.Name))
             .Concat(model.Enums.Select(x => Identifier(x.Name)))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var mixinNames = model.Classes.SelectMany(x => x.Parents.Skip(1))
             .Select(Identifier).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var b = new StringBuilder();
-        b.AppendLine("id: https://example.org/" + schemaName);
+        b.AppendLine("id: " + Scalar(model.OntologyIri.Length > 0 ? model.OntologyIri : "https://example.org/" + schemaName));
         b.AppendLine("name: " + Scalar(schemaName));
+        if (!model.Name.Equals(schemaName, StringComparison.Ordinal)) b.AppendLine("title: " + Scalar(model.Name));
         if (model.Version.Length > 0) b.AppendLine("version: " + Scalar(model.Version));
         if (model.Notes.Length > 0) b.AppendLine("description: " + Scalar(model.Notes));
         b.AppendLine("prefixes:");
-        b.AppendLine("  linkml: https://w3id.org/linkml/");
-        b.AppendLine("  " + schemaName + ": https://example.org/" + schemaName + "/");
-        b.AppendLine("default_prefix: " + schemaName);
+        var prefixes = model.LinkMlPrefixes.Count > 0
+            ? model.LinkMlPrefixes
+            : new Dictionary<string, string>(StringComparer.Ordinal) { ["linkml"] = "https://w3id.org/linkml/", [schemaName] = "https://example.org/" + schemaName + "/" };
+        foreach (var prefix in prefixes) b.AppendLine("  " + Identifier(prefix.Key) + ": " + Scalar(prefix.Value));
+        string defaultPrefix = model.LinkMlDefaultPrefix.Length > 0 ? model.LinkMlDefaultPrefix : schemaName;
+        b.AppendLine("default_prefix: " + Identifier(defaultPrefix));
         b.AppendLine("imports:");
-        b.AppendLine("  - linkml:types");
+        foreach (string import in model.LinkMlImports.Count > 0 ? model.LinkMlImports : ["linkml:types"])
+            b.AppendLine("  - " + Scalar(import));
 
         if (model.Enums.Count > 0)
         {
@@ -33,7 +38,12 @@ internal static class LinkMlWriter
                 b.AppendLine("  " + Identifier(item.Name) + ":");
                 if (item.Notes.Length > 0) b.AppendLine("    description: " + Scalar(item.Notes));
                 b.AppendLine("    permissible_values:");
-                foreach (var value in item.Values) b.AppendLine("      " + Scalar(value) + ":");
+                foreach (var value in item.Values)
+                {
+                    b.AppendLine("      " + Scalar(value) + ":");
+                    if (item.ValueDescriptions.TryGetValue(value, out var description) && description.Length > 0)
+                        b.AppendLine("        description: " + Scalar(description));
+                }
             }
         }
 
@@ -58,7 +68,7 @@ internal static class LinkMlWriter
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in cls.Properties)
                 WriteAttribute(b, Unique(property.Name, names), property.Type, property.Notes, property.Lower,
-                    property.Upper, property.ReadOnly, declaredRanges);
+                    property.Upper, property.ReadOnly, property.Identifier, declaredRanges);
             foreach (var relation in associations)
             {
                 bool forward = relation.SourceId == cls.Id;
@@ -66,14 +76,14 @@ internal static class LinkMlWriter
                 string other = forward ? relation.TargetName : relation.SourceName;
                 string multiplicity = forward ? relation.TargetMultiplicity : relation.SourceMultiplicity;
                 WriteAttribute(b, Unique(string.IsNullOrWhiteSpace(role) ? LowerCamel(other) : role, names), other, relation.Notes,
-                    Lower(multiplicity), Upper(multiplicity), false, declaredRanges);
+                    Lower(multiplicity), Upper(multiplicity), false, false, declaredRanges);
             }
         }
         return b.ToString();
     }
 
     private static void WriteAttribute(StringBuilder b, string name, string type, string notes, string lower,
-        string upper, bool readOnly, IReadOnlySet<string> declaredRanges)
+        string upper, bool readOnly, bool identifier, IReadOnlySet<string> declaredRanges)
     {
         b.AppendLine("      " + Identifier(name) + ":");
         b.AppendLine("        range: " + Range(type, declaredRanges));
@@ -84,6 +94,7 @@ internal static class LinkMlWriter
         if (many && int.TryParse(lower, out var min) && min > 0) b.AppendLine("        minimum_cardinality: " + min);
         if (many && int.TryParse(upper, out max)) b.AppendLine("        maximum_cardinality: " + max);
         if (readOnly) b.AppendLine("        readonly: true");
+        if (identifier) b.AppendLine("        identifier: true");
     }
 
     private static string Range(string type, IReadOnlySet<string> declaredRanges)

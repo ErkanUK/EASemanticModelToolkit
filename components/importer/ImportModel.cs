@@ -6,6 +6,11 @@ internal sealed class ImportModel
     public string Description { get; init; } = "";
     public string Version { get; init; } = "";
     public string OntologyIri { get; init; } = "";
+    public string LinkMlName { get; init; } = "";
+    public string LinkMlDefaultPrefix { get; init; } = "";
+    public Dictionary<string, string> LinkMlPrefixes { get; } = new(StringComparer.Ordinal);
+    public List<string> LinkMlImports { get; } = [];
+    public List<string> UnsupportedLinkMlFeatures { get; } = [];
     public List<ImportClass> Classes { get; } = [];
     public List<ImportEnum> Enums { get; } = [];
     public Dictionary<string, string> DiagramDomainColors { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -39,4 +44,6 @@ internal sealed class ImportProperty
     public bool Many { get; init; }
     public bool IsReference { get; init; }
     public bool Identifier { get; set; }
+    public string LowerBound { get; init; } = "";
+    public string UpperBound { get; init; } = "";
 }

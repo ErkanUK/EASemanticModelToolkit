@@ -181,6 +181,40 @@ Assert(reusableAsset.Properties.Single(x => x.Name == "tags") is { Type: "String
 Assert(reusableSlotModel.Classes.Single(x => x.Name == "IdentifiersMixin").Properties.Single().Name == "external_id",
     "mixin resolves its global slots");
 
+var linkMlCoverage = new SchemaConverter().Convert(SimpleYaml.Parse("""
+id: https://example.org/grid
+name: grid_schema
+title: Grid Schema
+default_prefix: grid
+prefixes:
+  grid: https://example.org/grid/
+  linkml: https://w3id.org/linkml/
+imports:
+  - linkml:types
+  - https://example.org/common
+types:
+  voltage:
+    typeof: float
+classes:
+  Asset:
+    attributes:
+      terminals:
+        range: string
+        minimum_cardinality: 2
+        maximum_cardinality: 5
+"""), "fallback");
+Assert(linkMlCoverage.Name == "GridSchema" && linkMlCoverage.LinkMlName == "grid_schema",
+    "LinkML display title and schema name are retained");
+Assert(linkMlCoverage.OntologyIri == "https://example.org/grid" && linkMlCoverage.LinkMlDefaultPrefix == "grid",
+    "LinkML id and default prefix are retained");
+Assert(linkMlCoverage.LinkMlPrefixes["grid"] == "https://example.org/grid/" && linkMlCoverage.LinkMlImports.Count == 2,
+    "LinkML prefixes and imports are retained");
+var terminals = linkMlCoverage.Classes.Single().Properties.Single();
+Assert(terminals.LowerBound == "2" && terminals.UpperBound == "5", "exact LinkML cardinality bounds are retained");
+Assert(linkMlCoverage.UnsupportedLinkMlFeatures.Contains("custom types") &&
+       linkMlCoverage.UnsupportedLinkMlFeatures.Any(x => x.StartsWith("external import resolution")),
+    "unsupported LinkML features are reported");
+
 var namedEnums = JsonNode.Parse("""
 {
   "$defs": {
