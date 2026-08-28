@@ -33,6 +33,35 @@ inheritance, associations, roles and multiplicities. Missing EA attribute dataty
 without preventing the PlantUML document from rendering. In LinkML output, a missing datatype falls back to
 `string` so the generated schema does not contain an unresolved `range: unnamed` reference.
 
+## LinkML import into EA
+
+| LinkML feature | Status | Current behaviour |
+| --- | --- | --- |
+| `classes` | Implemented | Creates EA classes |
+| Inline `attributes` | Implemented | Creates attributes or associations according to `range` |
+| Top-level reusable `slots` | Implemented | Resolved when named in a class `slots` list |
+| `slot_usage` | Partial | Supports overrides for range, description, identifier, required and exact cardinalities |
+| Class-valued ranges | Implemented | Creates EA associations |
+| Enum-valued ranges | Implemented | Remain EA attributes typed by an enumeration |
+| `enums` / `permissible_values` | Implemented | Creates EA enumerations and imports value descriptions |
+| `is_a` | Implemented | Creates an EA generalization |
+| `mixins` | Partial | Creates generalizations, but mixin identity is not preserved separately |
+| `abstract` | Not implemented on import | Recognised as metadata but not applied to the EA class |
+| `mixin: true` | Not implemented on import | Does not mark or visually distinguish the EA class as a mixin |
+| `identifier: true` | Implemented | Sets the EA attribute’s ID property and is preserved during LinkML export |
+| `unique_keys` | Partial | Marks every member as an EA ID attribute, but loses the named composite-key structure |
+| `required` | Implemented | Converted to the appropriate EA lower bound |
+| `multivalued` | Implemented | Converted to upper bound `*`, unless an exact maximum is specified |
+| Exact cardinalities | Implemented | Values such as `2..5` are retained as EA lower and upper bounds |
+| Description | Implemented | Imported into EA notes |
+| Enumeration-value descriptions | Implemented | Imported into enumeration literal notes and preserved during LinkML export |
+| Schema `id` and `version` | Implemented | Stored as model metadata and preserved during LinkML export |
+| Schema `name` and `title` | Implemented | `title` is used as the EA display/package name while the LinkML `name` is retained for export |
+| `prefixes` and `default_prefix` | Implemented | Stored as LinkML metadata on the EA package and restored during export |
+| `imports` | Partial | Import declarations are preserved for export, but external schemas are not loaded or resolved |
+| Unsupported-feature reporting | Implemented | Displays a warning listing unsupported LinkML constructs before import and allows the user to continue or cancel |
+| EA colour/domain annotations | Implemented extension | Supports toolkit-specific diagram domains, colours and ordering |
+| Custom `relationships` | Implemented extension | Imported like class-valued attributes; this is a toolkit convention rather than core LinkML |
 
 ## Install
 
