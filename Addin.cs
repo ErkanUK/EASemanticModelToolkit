@@ -12,6 +12,7 @@ public sealed class Addin
     private const string ProductName = "Semantic Model Toolkit";
     private const string Menu = "-&Semantic Model Toolkit";
     private const string ImportItem = "Import JSON/YAML into selected package...";
+    private const string AttachMetadataItem = "Attach LinkML comments and annotations...";
     private const string ExportItem = "Export selected package...";
     private const string AboutItem = "About Semantic Model Toolkit";
 
@@ -21,7 +22,7 @@ public sealed class Addin
     public object EA_GetMenuItems(EA.Repository repository, string location, string menuName) => menuName switch
     {
         "" => Menu,
-        Menu => new[] { ImportItem, ExportItem, AboutItem },
+        Menu => new[] { ImportItem, AttachMetadataItem, ExportItem, AboutItem },
         _ => ""
     };
 
@@ -38,6 +39,9 @@ public sealed class Addin
         {
             case ImportItem:
                 Import(repository);
+                break;
+            case AttachMetadataItem:
+                AttachMetadata(repository);
                 break;
             case ExportItem:
                 Export(repository);
@@ -71,6 +75,15 @@ public sealed class Addin
             var root = EAJsonModelImporter.InputLoader.Load(dialog.FileName);
             var model = new EAJsonModelImporter.SchemaConverter().Convert(root,
                 Path.GetFileNameWithoutExtension(dialog.FileName));
+            model.SourceComments = EAJsonModelImporter.InputLoader.ExtractYamlComments(dialog.FileName);
+            if (model.UnsupportedLinkMlFeatures.Count > 0)
+            {
+                string features = string.Join("\r\n", model.UnsupportedLinkMlFeatures.Select(x => "• " + x));
+                if (MessageBox.Show("This LinkML file uses features that are not fully represented in EA:\r\n\r\n" +
+                        features + "\r\n\r\nSupported model content can still be imported. Continue?",
+                        "LinkML import limitations", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+            }
             int domainCount = model.Classes.SelectMany(x => x.DiagramDomains)
                 .Distinct(StringComparer.OrdinalIgnoreCase).Count();
             string diagramSummary = domainCount > 0
@@ -96,6 +109,43 @@ public sealed class Addin
         catch (Exception ex)
         {
             MessageBox.Show("Import failed:\n" + ex.Message, ProductName,
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private static void AttachMetadata(EA.Repository repository)
+    {
+        var package = SelectedPackage(repository);
+        if (package is null)
+        {
+            MessageBox.Show("Select the existing model package in the Browser first.", ProductName,
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Choose the source LinkML YAML whose comments and annotations should be retained",
+            Filter = "LinkML YAML|*.yaml;*.yml|All files|*.*"
+        };
+        if (dialog.ShowDialog() != DialogResult.OK) return;
+
+        try
+        {
+            var model = new EAJsonModelImporter.SchemaConverter().Convert(
+                EAJsonModelImporter.InputLoader.Load(dialog.FileName), Path.GetFileNameWithoutExtension(dialog.FileName));
+            model.SourceComments = EAJsonModelImporter.InputLoader.ExtractYamlComments(dialog.FileName);
+            EAJsonModelImporter.EaModelWriter.WriteLinkMlMetadata(package, model);
+            int commentLines = model.SourceComments.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
+            MessageBox.Show($"Metadata attached to '{package.Name}'.\n\n" +
+                    $"{commentLines} comment lines and {model.LinkMlAnnotations.Count} annotation blocks " +
+                    "will be restored during LinkML export.\n\n" +
+                    "Classes, attributes, connectors and diagrams were not changed.",
+                ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Metadata attachment failed:\n" + ex.Message, ProductName,
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
