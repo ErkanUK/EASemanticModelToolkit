@@ -393,6 +393,19 @@ Assert(smartLayout.All(x => repeatedLayout[x.Key] == x.Value), "layout is determ
 var subsetLayout = SmartDiagramLayout.Arrange(layoutModel, ["First"], false);
 Assert(subsetLayout.Keys.SequenceEqual(["First"]), "subset layout ignores relationships from excluded classes");
 
+var domainFilterModel = new ImportModel { Name = "Domain filter" };
+var networkA = new ImportClass { Name = "NetworkA" };
+networkA.DiagramDomains.Add("network");
+var networkB = new ImportClass { Name = "NetworkB" };
+networkB.DiagramDomains.Add("network");
+var health = new ImportClass { Name = "Health" };
+health.DiagramDomains.Add("health");
+domainFilterModel.Classes.AddRange([networkA, networkB, health]);
+Assert(!EaModelWriter.IsCrossDomainRelation(domainFilterModel, "NetworkA", "NetworkB"),
+    "overview hides relationships within one domain");
+Assert(EaModelWriter.IsCrossDomainRelation(domainFilterModel, "NetworkA", "Health"),
+    "overview retains relationships between domains");
+
 var ontologyModel = new ImportModel
 {
     Name = "People Model",

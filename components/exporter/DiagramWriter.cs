@@ -91,12 +91,13 @@ internal static class DiagramWriter
             .Concat(model.Enums.Select(item => new DiagramBox(item.Id, positions[item.Id], EnumHeight(item))))
             .ToList();
         int routeIndex = 0;
-        foreach (var rel in model.Relations)
+        foreach (var rel in model.Relations.Where(rel => IsCrossDomainRelation(model, rel)))
             AddLine(b, positions[rel.SourceId], positions[rel.TargetId], false, rel.LineColor, routeIndex++, boxes);
         foreach (var cls in model.Classes) foreach (var parent in cls.Parents)
         {
             var target = model.Classes.FirstOrDefault(x => x.Name == parent);
-            if (target is not null) AddLine(b, positions[cls.Id], positions[target.Id], true, "#475569", routeIndex++, boxes);
+            if (target is not null && IsCrossDomainRelation(cls, target))
+                AddLine(b, positions[cls.Id], positions[target.Id], true, "#475569", routeIndex++, boxes);
         }
         foreach (var cls in model.Classes)
         {
@@ -197,6 +198,17 @@ internal static class DiagramWriter
     private static string DisplayDomain(string value) => string.Join(" ", value.Replace('-', '_')
         .Split('_', StringSplitOptions.RemoveEmptyEntries).Select(x => char.ToUpperInvariant(x[0]) + x[1..]));
 
+    private static bool IsCrossDomainRelation(ModelSnapshot model, UmlRelation relation)
+    {
+        var source = model.Classes.FirstOrDefault(x => x.Id == relation.SourceId);
+        var target = model.Classes.FirstOrDefault(x => x.Id == relation.TargetId);
+        return source is not null && target is not null && IsCrossDomainRelation(source, target);
+    }
+
+    private static bool IsCrossDomainRelation(UmlClass source, UmlClass target) =>
+        !(source.Domains.FirstOrDefault() ?? "Other").Equals(target.Domains.FirstOrDefault() ?? "Other",
+            StringComparison.OrdinalIgnoreCase);
+
     private static XElement Edge(string id, int source, int target, string label, string style) =>
         new("mxCell", new XAttribute("id", id), new XAttribute("value", label), new XAttribute("style", style),
             new XAttribute("edge", "1"), new XAttribute("parent", "1"), new XAttribute("source", "c" + source),
@@ -233,30 +245,88 @@ internal static class DiagramWriter
         string route;
         if (Math.Abs(targetX - sourceX) >= Math.Abs(targetY - sourceY))
         {
-            int left = Math.Min(sourceX, targetX), right = Math.Max(sourceX, targetX);
-            var blockers = boxes.Where(box => box.Right >= left && box.Left <= right).ToList();
-            int above = blockers.Min(box => box.Top) - 24 - routeIndex * 14;
-            int below = blockers.Max(box => box.Bottom) + 24 + routeIndex * 14;
-            int laneY = Math.Abs(sourceY - above) + Math.Abs(targetY - above) <=
-                        Math.Abs(sourceY - below) + Math.Abs(targetY - below) ? above : below;
+            int laneY = ChooseHorizontalLane(source, target, boxes, routeIndex);
             int sourceEdgeY = laneY < source.Top ? source.Top : source.Bottom;
             int targetEdgeY = laneY < target.Top ? target.Top : target.Bottom;
             route = $"M {sourceX} {sourceEdgeY} V {laneY} H {targetX} V {targetEdgeY}";
         }
         else
         {
-            int top = Math.Min(sourceY, targetY), bottom = Math.Max(sourceY, targetY);
-            var blockers = boxes.Where(box => box.Bottom >= top && box.Top <= bottom).ToList();
-            int left = blockers.Min(box => box.Left) - 24 - routeIndex * 14;
-            int right = blockers.Max(box => box.Right) + 24 + routeIndex * 14;
-            int laneX = Math.Abs(sourceX - left) + Math.Abs(targetX - left) <=
-                        Math.Abs(sourceX - right) + Math.Abs(targetX - right) ? left : right;
+            int laneX = ChooseVerticalLane(source, target, boxes, routeIndex);
             int sourceEdgeX = laneX < source.Left ? source.Left : source.Right;
             int targetEdgeX = laneX < target.Left ? target.Left : target.Right;
             route = $"M {sourceEdgeX} {sourceY} H {laneX} V {targetY} H {targetEdgeX}";
         }
         b.AppendLine($"<path d=\"{route}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"2\" stroke-linejoin=\"miter\" {(inheritance ? "marker-end=\"url(#triangle)\"" : "")}/>");
     }
+
+    private static int ChooseHorizontalLane(DiagramBox source, DiagramBox target,
+        IReadOnlyList<DiagramBox> boxes, int routeIndex)
+    {
+        const int clearance = 18;
+        int ideal = (source.CenterY + target.CenterY) / 2;
+        var candidates = boxes.SelectMany(box => new[] { box.Top - clearance, box.Bottom + clearance })
+            .Append(ideal).Distinct()
+            .Where(y => (y < source.Top || y > source.Bottom) && (y < target.Top || y > target.Bottom))
+            .Where(y => IsHorizontalRouteClear(source, target, y, boxes))
+            .OrderBy(y => Math.Abs(source.CenterY - y) + Math.Abs(target.CenterY - y)).ThenBy(y => y)
+            .ToList();
+        return SelectLane(candidates, ideal, routeIndex,
+            boxes.Min(box => box.Top) - clearance, boxes.Max(box => box.Bottom) + clearance);
+    }
+
+    private static int ChooseVerticalLane(DiagramBox source, DiagramBox target,
+        IReadOnlyList<DiagramBox> boxes, int routeIndex)
+    {
+        const int clearance = 18;
+        int ideal = (source.CenterX + target.CenterX) / 2;
+        var candidates = boxes.SelectMany(box => new[] { box.Left - clearance, box.Right + clearance })
+            .Append(ideal).Distinct()
+            .Where(x => (x < source.Left || x > source.Right) && (x < target.Left || x > target.Right))
+            .Where(x => IsVerticalRouteClear(source, target, x, boxes))
+            .OrderBy(x => Math.Abs(source.CenterX - x) + Math.Abs(target.CenterX - x)).ThenBy(x => x)
+            .ToList();
+        return SelectLane(candidates, ideal, routeIndex,
+            boxes.Min(box => box.Left) - clearance, boxes.Max(box => box.Right) + clearance);
+    }
+
+    private static int SelectLane(IReadOnlyList<int> candidates, int ideal, int routeIndex, int lowFallback,
+        int highFallback)
+    {
+        if (candidates.Count == 0)
+            return Math.Abs(ideal - lowFallback) <= Math.Abs(ideal - highFallback) ? lowFallback : highFallback;
+        // Spread neighbouring connectors over the closest few valid lanes without
+        // sending later relationships progressively outside the SVG view box.
+        return candidates[routeIndex % Math.Min(3, candidates.Count)];
+    }
+
+    private static bool IsHorizontalRouteClear(DiagramBox source, DiagramBox target, int laneY,
+        IReadOnlyList<DiagramBox> boxes)
+    {
+        int sourceEdgeY = laneY < source.Top ? source.Top : source.Bottom;
+        int targetEdgeY = laneY < target.Top ? target.Top : target.Bottom;
+        return boxes.Where(box => box.Id != source.Id && box.Id != target.Id).All(box =>
+            !IntersectsVertical(source.CenterX, sourceEdgeY, laneY, box) &&
+            !IntersectsHorizontal(laneY, source.CenterX, target.CenterX, box) &&
+            !IntersectsVertical(target.CenterX, laneY, targetEdgeY, box));
+    }
+
+    private static bool IsVerticalRouteClear(DiagramBox source, DiagramBox target, int laneX,
+        IReadOnlyList<DiagramBox> boxes)
+    {
+        int sourceEdgeX = laneX < source.Left ? source.Left : source.Right;
+        int targetEdgeX = laneX < target.Left ? target.Left : target.Right;
+        return boxes.Where(box => box.Id != source.Id && box.Id != target.Id).All(box =>
+            !IntersectsHorizontal(source.CenterY, sourceEdgeX, laneX, box) &&
+            !IntersectsVertical(laneX, source.CenterY, target.CenterY, box) &&
+            !IntersectsHorizontal(target.CenterY, laneX, targetEdgeX, box));
+    }
+
+    private static bool IntersectsHorizontal(int y, int x1, int x2, DiagramBox box) =>
+        y > box.Top - 8 && y < box.Bottom + 8 && Math.Max(x1, x2) > box.Left - 8 && Math.Min(x1, x2) < box.Right + 8;
+
+    private static bool IntersectsVertical(int x, int y1, int y2, DiagramBox box) =>
+        x > box.Left - 8 && x < box.Right + 8 && Math.Max(y1, y2) > box.Top - 8 && Math.Min(y1, y2) < box.Bottom + 8;
 
     private static void AddBox(StringBuilder b, string title, IEnumerable<string> rows, (int X, int Y) p, int height,
         string fillColor, string borderColor, string fontColor)

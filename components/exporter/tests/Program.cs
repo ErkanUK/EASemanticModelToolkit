@@ -59,7 +59,7 @@ model.Relations.Add(new UmlRelation
 {
     Kind = "Association", SourceId = 2, TargetId = 1, SourceName = "Employee", TargetName = "Person",
     SourceRole = "reports", TargetRole = "manager", SourceMultiplicity = "0..*", TargetMultiplicity = "0..1",
-    Notes = "Line management", Composition = false, TargetNavigable = true
+    Notes = "Line management", Composition = false, TargetNavigable = true, LineColor = "#123456"
 });
 model.Relations.Add(new UmlRelation
 {
@@ -136,6 +136,8 @@ Assert(clusteredSvg.Contains("<rect x=\"68\" y=\"136\""),
     "SVG uses the saved focused-domain diagram positions when they are available");
 Assert(clusteredSvg.Contains("<path d=\"M ") && clusteredSvg.Contains(" H ") && clusteredSvg.Contains(" V "),
     "SVG relationships use square orthogonal routing");
+Assert(!clusteredSvg.Contains("stroke=\"#123456\" stroke-width=\"2\""),
+    "SVG overview hides relationships within a domain");
 
 var diagrams = new[]
 {

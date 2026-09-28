@@ -37,7 +37,8 @@ SVG export always includes a generated `*.overview.svg` in which classes are spa
 domain clusters using their preserved `annotations.ea_domains` or `annotations.domain` value. Where a focused
 domain diagram already exists in EA, its saved class positions are reused as the input for that domain in the
 overview; domains without one use an automatic layout. Native EA diagram SVGs are exported alongside it,
-preserving their manually arranged positions and connector routing.
+preserving their manually arranged positions and connector routing. Overview diagrams show only cross-domain
+relationships; focused domain diagrams retain their detailed internal relationships.
 
 ## LinkML import into EA
 

@@ -208,7 +208,7 @@ internal static class EaModelWriter
                 var definition = model.Classes.First(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
                 string domain = PrimaryDomain(definition);
                 return ClassColor(definition, model, domain, domainIndexes[domain]);
-            }, preserveExistingLayout);
+            }, preserveExistingLayout, true);
         for (int domainIndex = 0; domainIndex < domains.Count; domainIndex++)
         {
             string domain = domains[domainIndex];
@@ -234,7 +234,8 @@ internal static class EaModelWriter
 
     private static void CreateSmartDiagram(EA.Repository repository, EA.Package package, string name, string notes,
         ImportModel model, IReadOnlyDictionary<string, EA.Element> elements, IEnumerable<string>? classNames,
-        bool includeEnums, Func<string, int> backgroundColor, bool preserveExistingLayout)
+        bool includeEnums, Func<string, int> backgroundColor, bool preserveExistingLayout,
+        bool crossDomainRelationsOnly = false)
     {
         var diagram = preserveExistingLayout ? FindDiagram(package, name) : null;
         bool isNewDiagram = diagram is null;
@@ -264,12 +265,23 @@ internal static class EaModelWriter
             AddDiagramObject(diagram, element, box, backgroundColor(elementName));
         }
         diagram.DiagramObjects.Refresh();
-        if (isNewDiagram)
+        if (isNewDiagram || crossDomainRelationsOnly)
         {
             diagram.DiagramLinks.Refresh();
+            var classNamesByElementId = elements
+                .Where(item => model.Classes.Any(cls => cls.Name.Equals(item.Key, StringComparison.OrdinalIgnoreCase)))
+                .ToDictionary(item => item.Value.ElementID, item => item.Key);
             foreach (EA.DiagramLink link in diagram.DiagramLinks)
             {
-                link.LineStyle = settings.LineStyle();
+                if (isNewDiagram) link.LineStyle = settings.LineStyle();
+                if (crossDomainRelationsOnly)
+                {
+                    EA.Connector connector = repository.GetConnectorByID(link.ConnectorID);
+                    bool visible = classNamesByElementId.TryGetValue(connector.ClientID, out string? sourceName) &&
+                                   classNamesByElementId.TryGetValue(connector.SupplierID, out string? targetName) &&
+                                   IsCrossDomainRelation(model, sourceName, targetName);
+                    link.IsHidden = !visible;
+                }
                 link.Update();
             }
         }
@@ -305,6 +317,14 @@ internal static class EaModelWriter
         definition.DiagramDomains.Count > 0 ? definition.DiagramDomains : ["other"];
 
     private static string PrimaryDomain(ImportClass definition) => EffectiveDomains(definition).First();
+
+    internal static bool IsCrossDomainRelation(ImportModel model, string sourceName, string targetName)
+    {
+        var source = model.Classes.FirstOrDefault(x => x.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
+        var target = model.Classes.FirstOrDefault(x => x.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase));
+        return source is not null && target is not null &&
+               !PrimaryDomain(source).Equals(PrimaryDomain(target), StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string DisplayDomain(string domain) => string.Join(" ", domain.Replace('-', '_').Split('_',
         StringSplitOptions.RemoveEmptyEntries).Select(x => char.ToUpperInvariant(x[0]) + x[1..]));
