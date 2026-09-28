@@ -15,7 +15,13 @@ internal sealed class ModelSnapshot
     public List<UmlClass> Classes { get; } = [];
     public List<UmlEnum> Enums { get; } = [];
     public List<UmlRelation> Relations { get; } = [];
+    // Positions taken from focused EA domain diagrams. These are export-only
+    // hints: reading them never changes a user's EA diagram layout.
+    public Dictionary<string, Dictionary<int, DiagramPosition>> DomainDiagramPositions { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
 }
+
+internal readonly record struct DiagramPosition(int Left, int Top, int Right, int Bottom);
 
 internal sealed class UmlClass
 {
@@ -28,6 +34,7 @@ internal sealed class UmlClass
     public string FillColor { get; init; } = "#FFFFFF";
     public string BorderColor { get; init; } = "#334155";
     public string FontColor { get; init; } = "#0F172A";
+    public List<string> Domains { get; } = [];
     public List<UmlProperty> Properties { get; } = [];
     public List<string> Parents { get; } = [];
 }

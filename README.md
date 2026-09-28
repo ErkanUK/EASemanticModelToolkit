@@ -33,6 +33,12 @@ inheritance, associations, roles and multiplicities. Missing EA attribute dataty
 without preventing the PlantUML document from rendering. In LinkML output, a missing datatype falls back to
 `string` so the generated schema does not contain an unresolved `range: unnamed` reference.
 
+SVG export always includes a generated `*.overview.svg` in which classes are spatially grouped into labelled
+domain clusters using their preserved `annotations.ea_domains` or `annotations.domain` value. Where a focused
+domain diagram already exists in EA, its saved class positions are reused as the input for that domain in the
+overview; domains without one use an automatic layout. Native EA diagram SVGs are exported alongside it,
+preserving their manually arranged positions and connector routing.
+
 ## LinkML import into EA
 
 | LinkML feature | Status | Current behaviour |

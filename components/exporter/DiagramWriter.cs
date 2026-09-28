@@ -72,19 +72,32 @@ internal static class DiagramWriter
 
     public static string WriteSvg(ModelSnapshot model)
     {
-        var positions = Positions(model);
-        int count = model.Classes.Count + model.Enums.Count;
-        int columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(count)));
-        int rows = Math.Max(1, (int)Math.Ceiling(count / (double)columns));
-        int canvasWidth = columns * 340 + 40, canvasHeight = rows * 280 + 40;
+        var layout = DomainClusterLayout(model);
+        var positions = layout.Positions;
+        int canvasWidth = layout.Width, canvasHeight = layout.Height;
         var b = new StringBuilder();
         b.AppendLine($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{canvasWidth}\" height=\"{canvasHeight}\" viewBox=\"0 0 {canvasWidth} {canvasHeight}\">");
         b.AppendLine("<defs><marker id=\"triangle\" markerWidth=\"12\" markerHeight=\"12\" refX=\"11\" refY=\"6\" orient=\"auto\"><path d=\"M 0 0 L 12 6 L 0 12 z\" fill=\"white\" stroke=\"#475569\"/></marker></defs>");
         b.AppendLine("<rect width=\"100%\" height=\"100%\" fill=\"#f8fafc\"/>");
-        b.AppendLine($"<text x=\"20\" y=\"28\" font-family=\"Segoe UI, sans-serif\" font-size=\"16\" font-weight=\"600\">{Esc(model.Name + " — EA package version " + VersionLabel(model))}</text>");
-        foreach (var rel in model.Relations) AddLine(b, positions[rel.SourceId], positions[rel.TargetId], false, rel.LineColor);
+        b.AppendLine($"<text x=\"20\" y=\"28\" font-family=\"Segoe UI, sans-serif\" font-size=\"16\" font-weight=\"600\">{Esc(model.Name + " - EA package version " + VersionLabel(model))}</text>");
+        foreach (var cluster in layout.Clusters)
+        {
+            b.AppendLine($"<g class=\"domain-cluster\" data-domain=\"{Esc(cluster.Name)}\">");
+            b.AppendLine($"<rect x=\"{cluster.X}\" y=\"{cluster.Y}\" width=\"{cluster.Width}\" height=\"{cluster.Height}\" rx=\"12\" fill=\"{cluster.Color}\" fill-opacity=\"0.13\" stroke=\"{cluster.Color}\" stroke-width=\"3\"/>");
+            b.AppendLine($"<text x=\"{cluster.X + 20}\" y=\"{cluster.Y + 29}\" font-family=\"Segoe UI, sans-serif\" font-size=\"17\" font-weight=\"700\" fill=\"#1e293b\">{Esc(DisplayDomain(cluster.Name))}</text>");
+            b.AppendLine("</g>");
+        }
+        var boxes = model.Classes.Select(cls => new DiagramBox(cls.Id, positions[cls.Id], Height(cls)))
+            .Concat(model.Enums.Select(item => new DiagramBox(item.Id, positions[item.Id], EnumHeight(item))))
+            .ToList();
+        int routeIndex = 0;
+        foreach (var rel in model.Relations)
+            AddLine(b, positions[rel.SourceId], positions[rel.TargetId], false, rel.LineColor, routeIndex++, boxes);
         foreach (var cls in model.Classes) foreach (var parent in cls.Parents)
-        { var target = model.Classes.FirstOrDefault(x => x.Name == parent); if (target is not null) AddLine(b, positions[cls.Id], positions[target.Id], true, "#475569"); }
+        {
+            var target = model.Classes.FirstOrDefault(x => x.Name == parent);
+            if (target is not null) AddLine(b, positions[cls.Id], positions[target.Id], true, "#475569", routeIndex++, boxes);
+        }
         foreach (var cls in model.Classes)
         {
             var title = string.IsNullOrWhiteSpace(cls.Version) ? cls.Name : $"{cls.Name} (v{cls.Version})";
@@ -94,6 +107,95 @@ internal static class DiagramWriter
         b.AppendLine("</svg>");
         return b.ToString();
     }
+
+    private static SvgLayout DomainClusterLayout(ModelSnapshot model)
+    {
+        var groups = model.Classes.GroupBy(x => x.Domains.FirstOrDefault() ?? "Other", StringComparer.OrdinalIgnoreCase)
+            .Select(group => BuildCluster(group.Key, group.OrderBy(x => x.Name).Cast<object>().ToList(),
+                model.DomainDiagramPositions.TryGetValue(group.Key, out var positions) ? positions : null))
+            .OrderBy(x => x.Name.Equals("Other", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        if (model.Enums.Count > 0)
+            groups.Add(BuildCluster("Enumerations", model.Enums.OrderBy(x => x.Name).Cast<object>().ToList()));
+
+        const int margin = 40, gap = 90, clustersPerRow = 2;
+        var positions = new Dictionary<int, (int X, int Y)>();
+        var placed = new List<SvgCluster>();
+        int y = 60, canvasRight = margin;
+        for (int index = 0; index < groups.Count; index += clustersPerRow)
+        {
+            var row = groups.Skip(index).Take(clustersPerRow).ToList();
+            int x = margin;
+            int rowHeight = row.Max(item => item.Height);
+            foreach (var cluster in row)
+            {
+                foreach (var item in cluster.Positions)
+                    positions[item.Key] = (item.Value.X + x, item.Value.Y + y);
+                placed.Add(new SvgCluster(cluster.Name, cluster.Color, x, y, cluster.Width, cluster.Height));
+                canvasRight = Math.Max(canvasRight, x + cluster.Width);
+                x += cluster.Width + gap;
+            }
+            y += rowHeight + gap;
+        }
+        return new SvgLayout(positions, placed, canvasRight + margin, y - gap + margin);
+    }
+
+    private static LocalCluster BuildCluster(string name, IReadOnlyList<object> nodes,
+        IReadOnlyDictionary<int, DiagramPosition>? sourcePositions = null)
+    {
+        const int padding = 28, titleHeight = 48, horizontalGap = 50, verticalGap = 45;
+        if (sourcePositions is not null && nodes.All(node => sourcePositions.ContainsKey(NodeId(node))))
+        {
+            var source = nodes.Select(node => (Id: NodeId(node), Position: sourcePositions[NodeId(node)])).ToList();
+            int left = source.Min(item => item.Position.Left), top = source.Min(item => item.Position.Top);
+            int right = source.Max(item => item.Position.Right), bottom = source.Max(item => item.Position.Bottom);
+            var preservedPositions = source.ToDictionary(item => item.Id,
+                item => (X: padding + item.Position.Left - left, Y: titleHeight + padding + item.Position.Top - top));
+            string preservedColor = nodes.OfType<UmlClass>().Select(x => x.FillColor).FirstOrDefault() ?? "#E2E8F0";
+            return new LocalCluster(name, preservedColor, Math.Max(Width + padding * 2, right - left + padding * 2),
+                Math.Max(titleHeight + padding * 2 + 80, titleHeight + bottom - top + padding * 2), preservedPositions);
+        }
+
+        int columns = Math.Min(3, Math.Max(1, (int)Math.Ceiling(Math.Sqrt(nodes.Count))));
+        int rows = Math.Max(1, (int)Math.Ceiling(nodes.Count / (double)columns));
+        var heights = nodes.Select(NodeHeight).ToList();
+        var rowHeights = Enumerable.Range(0, rows)
+            .Select(row => Enumerable.Range(row * columns, Math.Min(columns, nodes.Count - row * columns))
+                .Select(i => heights[i]).DefaultIfEmpty(0).Max()).ToList();
+        int width = padding * 2 + columns * Width + Math.Max(0, columns - 1) * horizontalGap;
+        int height = titleHeight + padding + rowHeights.Sum() + Math.Max(0, rows - 1) * verticalGap + padding;
+        var positions = new Dictionary<int, (int X, int Y)>();
+        int y = titleHeight + padding;
+        for (int row = 0; row < rows; row++)
+        {
+            for (int column = 0; column < columns; column++)
+            {
+                int index = row * columns + column;
+                if (index >= nodes.Count) break;
+                positions[NodeId(nodes[index])] = (padding + column * (Width + horizontalGap), y);
+            }
+            y += rowHeights[row] + verticalGap;
+        }
+        string color = nodes.OfType<UmlClass>().Select(x => x.FillColor).FirstOrDefault() ?? "#E2E8F0";
+        return new LocalCluster(name, color, width, height, positions);
+    }
+
+    private static int NodeId(object node) => node switch
+    {
+        UmlClass cls => cls.Id,
+        UmlEnum item => item.Id,
+        _ => throw new ArgumentOutOfRangeException(nameof(node))
+    };
+
+    private static int NodeHeight(object node) => node switch
+    {
+        UmlClass cls => Height(cls),
+        UmlEnum item => EnumHeight(item),
+        _ => 80
+    };
+
+    private static string DisplayDomain(string value) => string.Join(" ", value.Replace('-', '_')
+        .Split('_', StringSplitOptions.RemoveEmptyEntries).Select(x => char.ToUpperInvariant(x[0]) + x[1..]));
 
     private static XElement Edge(string id, int source, int target, string label, string style) =>
         new("mxCell", new XAttribute("id", id), new XAttribute("value", label), new XAttribute("style", style),
@@ -119,8 +221,42 @@ internal static class DiagramWriter
         "swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;html=1;rounded=0;" +
         $"fillColor={fill};strokeColor={border};fontColor={font};swimlaneFillColor={fill};";
     private static string Esc(string value) => SecurityElement.Escape(value) ?? "";
-    private static void AddLine(StringBuilder b, (int X, int Y) a, (int X, int Y) z, bool inheritance, string color) =>
-        b.AppendLine($"<line x1=\"{a.X + Width / 2}\" y1=\"{a.Y + 60}\" x2=\"{z.X + Width / 2}\" y2=\"{z.Y + 60}\" stroke=\"{color}\" stroke-width=\"2\" {(inheritance ? "marker-end=\"url(#triangle)\"" : "")}/>");
+    private static void AddLine(StringBuilder b, (int X, int Y) a, (int X, int Y) z, bool inheritance, string color,
+        int routeIndex, IReadOnlyList<DiagramBox> boxes)
+    {
+        // SVG has no diagram router. Use separate outside lanes so a connector
+        // starts/ends at a box edge and cannot run through class content.
+        var source = boxes.First(box => box.Position == a);
+        var target = boxes.First(box => box.Position == z);
+        int sourceX = source.CenterX, sourceY = source.CenterY;
+        int targetX = target.CenterX, targetY = target.CenterY;
+        string route;
+        if (Math.Abs(targetX - sourceX) >= Math.Abs(targetY - sourceY))
+        {
+            int left = Math.Min(sourceX, targetX), right = Math.Max(sourceX, targetX);
+            var blockers = boxes.Where(box => box.Right >= left && box.Left <= right).ToList();
+            int above = blockers.Min(box => box.Top) - 24 - routeIndex * 14;
+            int below = blockers.Max(box => box.Bottom) + 24 + routeIndex * 14;
+            int laneY = Math.Abs(sourceY - above) + Math.Abs(targetY - above) <=
+                        Math.Abs(sourceY - below) + Math.Abs(targetY - below) ? above : below;
+            int sourceEdgeY = laneY < source.Top ? source.Top : source.Bottom;
+            int targetEdgeY = laneY < target.Top ? target.Top : target.Bottom;
+            route = $"M {sourceX} {sourceEdgeY} V {laneY} H {targetX} V {targetEdgeY}";
+        }
+        else
+        {
+            int top = Math.Min(sourceY, targetY), bottom = Math.Max(sourceY, targetY);
+            var blockers = boxes.Where(box => box.Bottom >= top && box.Top <= bottom).ToList();
+            int left = blockers.Min(box => box.Left) - 24 - routeIndex * 14;
+            int right = blockers.Max(box => box.Right) + 24 + routeIndex * 14;
+            int laneX = Math.Abs(sourceX - left) + Math.Abs(targetX - left) <=
+                        Math.Abs(sourceX - right) + Math.Abs(targetX - right) ? left : right;
+            int sourceEdgeX = laneX < source.Left ? source.Left : source.Right;
+            int targetEdgeX = laneX < target.Left ? target.Left : target.Right;
+            route = $"M {sourceEdgeX} {sourceY} H {laneX} V {targetY} H {targetEdgeX}";
+        }
+        b.AppendLine($"<path d=\"{route}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"2\" stroke-linejoin=\"miter\" {(inheritance ? "marker-end=\"url(#triangle)\"" : "")}/>");
+    }
 
     private static void AddBox(StringBuilder b, string title, IEnumerable<string> rows, (int X, int Y) p, int height,
         string fillColor, string borderColor, string fontColor)
@@ -131,4 +267,19 @@ internal static class DiagramWriter
         int y = p.Y + Header + 18;
         foreach (var row in rows) { b.AppendLine($"<text x=\"{p.X + 10}\" y=\"{y}\" font-family=\"Segoe UI, sans-serif\" font-size=\"12\" fill=\"{fontColor}\">{Esc(row)}</text>"); y += Row; }
     }
+
+    private sealed record LocalCluster(string Name, string Color, int Width, int Height,
+        IReadOnlyDictionary<int, (int X, int Y)> Positions);
+    private sealed record DiagramBox(int Id, (int X, int Y) Position, int Height)
+    {
+        public int Left => Position.X;
+        public int Top => Position.Y;
+        public int Right => Position.X + Width;
+        public int Bottom => Position.Y + Height;
+        public int CenterX => Position.X + Width / 2;
+        public int CenterY => Position.Y + Height / 2;
+    }
+    private sealed record SvgCluster(string Name, string Color, int X, int Y, int Width, int Height);
+    private sealed record SvgLayout(IReadOnlyDictionary<int, (int X, int Y)> Positions,
+        IReadOnlyList<SvgCluster> Clusters, int Width, int Height);
 }

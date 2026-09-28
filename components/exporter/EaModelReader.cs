@@ -27,6 +27,8 @@ internal static class EaModelReader
         foreach (var item in Deserialize<Dictionary<string, string>>(Tag(linkMlTags, "LinkML.annotations")) ?? [])
             model.LinkMlAnnotations[item.Key] = item.Value;
         ReadPackage(repository, root, root.Name, model, appearances.Elements);
+        ApplyDomains(model);
+        ReadDomainDiagramPositions(root, model);
         ReadRelations(repository, model, appearances.Connectors);
         return model;
     }
@@ -174,6 +176,86 @@ internal static class EaModelReader
         try { return System.Text.Json.JsonSerializer.Deserialize<T>(value); }
         catch { return default; }
     }
+
+    private static void ApplyDomains(ModelSnapshot model)
+    {
+        foreach (var cls in model.Classes)
+        {
+            if (!model.LinkMlAnnotations.TryGetValue("class:" + cls.Name, out string? json)) continue;
+            try
+            {
+                var annotations = System.Text.Json.Nodes.JsonNode.Parse(json) as System.Text.Json.Nodes.JsonObject;
+                var node = annotations?["ea_domains"] ?? annotations?["domain"];
+                if (node is System.Text.Json.Nodes.JsonObject wrapper && wrapper["value"] is not null)
+                    node = wrapper["value"];
+                IEnumerable<string> domains = node switch
+                {
+                    System.Text.Json.Nodes.JsonArray array => array.Select(x => x?.ToString() ?? ""),
+                    null => [],
+                    _ => node.ToString().Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                };
+                foreach (string domain in domains.Select(x => x.Trim().Trim('"', '\'' )).Where(x => x.Length > 0))
+                    if (!cls.Domains.Contains(domain, StringComparer.OrdinalIgnoreCase)) cls.Domains.Add(domain);
+            }
+            catch { /* malformed preservation metadata must not prevent export */ }
+        }
+    }
+
+    private static void ReadDomainDiagramPositions(EA.Package root, ModelSnapshot model)
+    {
+        var diagramNames = model.Classes.SelectMany(x => x.Domains).Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(domain => model.Name + " - " + DisplayDomain(domain), domain => domain,
+                StringComparer.OrdinalIgnoreCase);
+        if (diagramNames.Count == 0) return;
+
+        var classIds = model.Classes.Select(x => Convert.ToInt32(x.Id)).ToHashSet();
+        ReadDomainDiagramPositions(root, diagramNames, classIds, model);
+    }
+
+    private static void ReadDomainDiagramPositions(EA.Package package, IReadOnlyDictionary<string, string> diagramNames,
+        IReadOnlySet<int> classIds, ModelSnapshot model)
+    {
+        foreach (EA.Diagram diagram in package.Diagrams)
+        {
+            if (!diagramNames.TryGetValue(Convert.ToString(diagram.Name) ?? "", out string? domain) ||
+                model.DomainDiagramPositions.ContainsKey(domain))
+                continue;
+            var positions = new Dictionary<int, DiagramPosition>();
+            foreach (EA.DiagramObject diagramObject in diagram.DiagramObjects)
+            {
+                int id = Convert.ToInt32(diagramObject.ElementID);
+                if (classIds.Contains(id) && TryReadPosition(Convert.ToString(diagramObject.Style), out var position)) positions[id] = position;
+            }
+            if (positions.Count > 0) model.DomainDiagramPositions[domain] = positions;
+        }
+        foreach (EA.Package child in package.Packages)
+            ReadDomainDiagramPositions(child, diagramNames, classIds, model);
+    }
+
+    private static bool TryReadPosition(string? style, out DiagramPosition position)
+    {
+        position = default;
+        if (string.IsNullOrWhiteSpace(style)) return false;
+        var values = style.Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .Select(item => item.Split('=', 2))
+            .Where(item => item.Length == 2)
+            .ToDictionary(item => item[0].Trim(), item => item[1].Trim(), StringComparer.OrdinalIgnoreCase);
+        if (!TryPositionValue(values, "l", out int left) || !TryPositionValue(values, "r", out int right) ||
+            !TryPositionValue(values, "t", out int top) || !TryPositionValue(values, "b", out int bottom)) return false;
+        // EA stores its vertical diagram coordinates inverted in the style string.
+        position = new DiagramPosition(left, -top, right, -bottom);
+        return right > left && bottom < top;
+    }
+
+    private static bool TryPositionValue(IReadOnlyDictionary<string, string> values, string key, out int value)
+    {
+        value = 0;
+        return values.TryGetValue(key, out var raw) && int.TryParse(raw, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out value);
+    }
+
+    private static string DisplayDomain(string value) => string.Join(" ", value.Replace('-', '_')
+        .Split('_', StringSplitOptions.RemoveEmptyEntries).Select(x => char.ToUpperInvariant(x[0]) + x[1..]));
 
     private static AppearanceMaps ReadAppearances(EA.Package root)
     {

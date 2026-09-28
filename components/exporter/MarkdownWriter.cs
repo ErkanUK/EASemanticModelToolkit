@@ -20,6 +20,11 @@ internal static class MarkdownWriter
         if (owlName is not null) links.Add("[OWL/RDF-XML ontology](" + owlName + ")");
         if (turtleName is not null) links.Add("[OWL Turtle ontology](" + turtleName + ")");
         if (links.Count > 0) b.AppendLine(string.Join(" · ", links)).AppendLine();
+        if (fallbackSvgName is not null)
+        {
+            b.AppendLine("## Generated domain overview").AppendLine();
+            b.AppendLine("![Generated domain-clustered UML overview](" + fallbackSvgName.Replace(" ", "%20") + ")").AppendLine();
+        }
         if (eaDiagrams.Count > 0)
         {
             b.AppendLine("## EA diagrams").AppendLine();
@@ -28,10 +33,6 @@ internal static class MarkdownWriter
                 b.AppendLine("### " + diagram.Name).AppendLine();
                 b.AppendLine("![" + Alt(diagram.Name) + "](" + diagram.RelativePath.Replace(" ", "%20") + ")").AppendLine();
             }
-        }
-        else if (fallbackSvgName is not null)
-        {
-            b.AppendLine("![Generated UML class diagram](" + fallbackSvgName.Replace(" ", "%20") + ")").AppendLine();
         }
         b.AppendLine("## Classes").AppendLine();
         foreach (var cls in model.Classes.OrderBy(x => x.Name))

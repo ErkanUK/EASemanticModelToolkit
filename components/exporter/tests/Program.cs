@@ -21,6 +21,7 @@ var person = new UmlClass
 {
     Id = 1, Name = "Person", QualifiedName = "Model::Person", Notes = "A person", Abstract = false
 };
+person.Domains.Add("People");
 person.Properties.Add(new UmlProperty
 {
     Name = "identifier", Type = "String", Notes = "Stable identifier", Lower = "1", Upper = "1",
@@ -42,6 +43,7 @@ var employee = new UmlClass
 {
     Id = 2, Name = "Employee", QualifiedName = "Model::Employee", Notes = "", Abstract = false
 };
+employee.Domains.Add("People");
 employee.Parents.Add("Person");
 employee.Parents.Add("PartyMixin");
 model.Classes.AddRange([person, employee]);
@@ -65,6 +67,11 @@ model.Relations.Add(new UmlRelation
     SourceRole = "people", TargetRole = "maximo_assets", SourceMultiplicity = "0..1", TargetMultiplicity = "0..*",
     Notes = "Preserved navigable collection", Composition = false, TargetNavigable = true
 });
+model.DomainDiagramPositions["People"] = new Dictionary<int, DiagramPosition>
+{
+    [1] = new DiagramPosition(100, 200, 360, 340),
+    [2] = new DiagramPosition(500, 200, 760, 340)
+};
 
 string turtle = OwlWriter.WriteTurtle(model);
 Assert(turtle.Contains("a owl:Ontology"), "Turtle ontology declaration");
@@ -120,6 +127,16 @@ Assert(plantUml.Contains("untypedValue: unnamed [0..1]"), "unknown datatype rema
 Assert(plantUml.Contains("<|--"), "PlantUML inheritance");
 Assert(plantUml.Contains("-->"), "PlantUML association");
 
+string clusteredSvg = DiagramWriter.WriteSvg(model);
+Assert(clusteredSvg.Contains("class=\"domain-cluster\""), "SVG contains domain cluster containers");
+Assert(clusteredSvg.Contains("data-domain=\"People\""), "SVG contains the annotated domain cluster");
+Assert(clusteredSvg.Contains("data-domain=\"Other\""), "SVG contains a fallback cluster for unannotated classes");
+Assert(clusteredSvg.Contains("data-domain=\"Enumerations\""), "SVG contains an enumeration cluster");
+Assert(clusteredSvg.Contains("<rect x=\"68\" y=\"136\""),
+    "SVG uses the saved focused-domain diagram positions when they are available");
+Assert(clusteredSvg.Contains("<path d=\"M ") && clusteredSvg.Contains(" H ") && clusteredSvg.Contains(" V "),
+    "SVG relationships use square orthogonal routing");
+
 var diagrams = new[]
 {
     new ExportedDiagram("Network / Asset Health", "diagrams/001-Asset Health.svg"),
@@ -137,7 +154,9 @@ Assert(nativeMarkdown.Contains("![Network / Load (Planning)]"), "Markdown alt te
 
 string fallbackMarkdown = MarkdownWriter.Write(model, "model.drawio", "model.svg", "model.yaml",
     "model.schema.json", "model.owl", "model.ttl", "model.puml", []);
-Assert(fallbackMarkdown.Contains("![Generated UML class diagram](model.svg)"), "generated SVG fallback");
+Assert(fallbackMarkdown.Contains("## Generated domain overview") &&
+       fallbackMarkdown.Contains("![Generated domain-clustered UML overview](model.svg)"),
+    "generated domain overview SVG");
 Assert(ExportOptions.All.LinkMl && ExportOptions.All.JsonSchema && ExportOptions.All.Markdown &&
        ExportOptions.All.DrawIo && ExportOptions.All.PlantUml && ExportOptions.All.Svg &&
        ExportOptions.All.Owl && ExportOptions.All.Turtle,

@@ -31,12 +31,9 @@ internal static class Exporter
         string? fallbackSvgName = null;
         if (options.Svg)
         {
+            fallbackSvgName = stem + ".overview.svg";
+            File.WriteAllText(Path.Combine(directory, fallbackSvgName), DiagramWriter.WriteSvg(model), new UTF8Encoding(false));
             eaDiagrams = EaDiagramSvgExporter.Export(repository, package, directory);
-            if (eaDiagrams.Count == 0)
-            {
-                fallbackSvgName = stem + ".svg";
-                File.WriteAllText(Path.Combine(directory, fallbackSvgName), DiagramWriter.WriteSvg(model), new UTF8Encoding(false));
-            }
         }
         if (options.Owl)
             File.WriteAllText(Path.Combine(directory, owlName), OwlWriter.WriteRdfXml(model), new UTF8Encoding(false));
