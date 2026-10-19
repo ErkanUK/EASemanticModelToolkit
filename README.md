@@ -42,6 +42,43 @@ relationships; focused domain diagrams retain their detailed internal relationsh
 
 ## LinkML import into EA
 
+### Preserve domain packages (1.1.6)
+
+Export the **model root package** to include all domains and their relationships. The exporter
+records the actual owning package of every class and enumeration in `annotations.ea_package_path`,
+relative to that root. Nested packages use `/`, for example:
+
+```yaml
+classes:
+  StreetAddress:
+    annotations:
+      domain: "LCT CRI Readiness"
+      ea_package_path: "LCT CRI Readiness/Address"
+```
+
+On update, the importer searches the entire selected model tree, updates matching classes and
+enumerations in place, creates missing packages, and applies explicit package paths. Moving an
+existing element changes its package ownership without replacing its EA identity or connections.
+Existing named generated diagrams are also found in subpackages, preserving their location and layout.
+The `domain`/`ea_domains` annotations still control diagram grouping independently of package ownership.
+
+- An **absent** `ea_package_path` preserves an existing element's location. A new element without
+  the annotation is created at the model root. Old YAML therefore remains usable.
+- An **empty string** explicitly places an element at the model root.
+- Paths cannot escape the selected model. Empty segments, `.`/`..`, backslashes, control characters,
+  and surrounding segment whitespace are rejected. Package names containing `/` cannot be represented.
+- Class/enum names must be unique across that model because YAML uses global definition keys. Ambiguous
+  existing element names or sibling package names stop import before model metadata is written;
+  export also rejects duplicate/sanitized definition-key collisions. No arbitrary match is chosen.
+- Export uses current EA ownership rather than stale imported path annotations. Re-export after moving
+  classes in EA before applying further YAML updates, otherwise an older explicit path will move them back.
+- Empty packages and full package metadata are not serialized; only class/enum ownership is round-tripped.
+  Diagram names must be unambiguous within the model when preserving existing generated diagrams.
+
+Run `dotnet run --project components/package-tests/PackageRoundTrip.Tests.csproj` for package-path,
+nested resolution, ambiguity and exporter-to-importer regression checks. Live EA COM update behaviour
+must also be verified in a copy of an EA model; these tests do not automate Enterprise Architect.
+
 | LinkML feature | Status | Current behaviour |
 | --- | --- | --- |
 | `classes` | Implemented | Creates EA classes |

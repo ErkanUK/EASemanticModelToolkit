@@ -15,17 +15,23 @@ internal static class EaModelWriter
     {
         bool updating = existingPackage is not null;
         var package = existingPackage ?? CreatePackage(target, model.Name);
+        // Resolve ambiguities before changing model metadata or creating elements.
+        var elements = updating
+            ? ExistingElements(package)
+            : new Dictionary<string, EA.Element>(StringComparer.OrdinalIgnoreCase);
+        if (model.Classes.Select(c => c.Name).Concat(model.Enums.Select(e => e.Name))
+            .GroupBy(n => n, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1))
+            throw new InvalidDataException("Class and enumeration names must be unique within the model.");
+        foreach (string path in model.Classes.Select(c => c.PackagePath).Concat(model.Enums.Select(e => e.PackagePath)).OfType<string>())
+            PackagePlacement.Normalize(path);
         package.Notes = model.Description;
         if (model.Version.Length > 0) package.Version = model.Version;
         package.Update();
         WriteLinkMlMetadata(package, model);
 
-        var elements = updating
-            ? ExistingElements(package)
-            : new Dictionary<string, EA.Element>(StringComparer.OrdinalIgnoreCase);
         foreach (var definition in model.Enums)
         {
-            var element = UpsertElement(package, elements, definition.Name, "Enumeration");
+            var element = UpsertElement(repository, package, elements, definition.Name, "Enumeration", definition.PackagePath);
             element.Notes = definition.Description;
             element.Update();
             foreach (var value in definition.Values)
@@ -40,7 +46,7 @@ internal static class EaModelWriter
         }
         foreach (var definition in model.Classes)
         {
-            var element = UpsertElement(package, elements, definition.Name, "Class");
+            var element = UpsertElement(repository, package, elements, definition.Name, "Class", definition.PackagePath);
             element.Notes = definition.Description;
             element.Update();
         }
@@ -135,26 +141,48 @@ internal static class EaModelWriter
         tag.Update();
     }
 
-    private static Dictionary<string, EA.Element> ExistingElements(EA.Package package)
-    {
-        var elements = new Dictionary<string, EA.Element>(StringComparer.OrdinalIgnoreCase);
-        foreach (EA.Element element in package.Elements)
-            elements.TryAdd(element.Name, element);
-        return elements;
-    }
+    private static IEnumerable<EA.Package> ChildPackages(EA.Package package) => package.Packages.Cast<EA.Package>();
 
-    private static EA.Element UpsertElement(EA.Package package, IDictionary<string, EA.Element> elements,
-        string name, string type)
+    private static Dictionary<string, EA.Element> ExistingElements(EA.Package package) =>
+        PackagePlacement.Index(package, ChildPackages,
+            p => p.Elements.Cast<EA.Element>().Where(e => e.Type.Equals("Class", StringComparison.OrdinalIgnoreCase)
+                || e.Type.Equals("Enumeration", StringComparison.OrdinalIgnoreCase)), p => p.Name, e => e.Name);
+
+    private static EA.Package ResolvePackage(EA.Package root, string path) =>
+        PackagePlacement.Resolve(root, path, ChildPackages, p => p.Name, (parent, name) =>
+        {
+            var child = (EA.Package)parent.Packages.AddNew(name, "");
+            if (!child.Update()) throw new InvalidOperationException("Could not create package '" + name + "': " + child.GetLastError());
+            parent.Packages.Refresh();
+            return child;
+        });
+
+    private static EA.Element UpsertElement(EA.Repository repository, EA.Package root,
+        IDictionary<string, EA.Element> elements, string name, string type, string? path)
     {
         if (elements.TryGetValue(name, out var existing))
         {
             if (!existing.Type.Equals(type, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException(
                     $"Cannot update '{name}': the existing EA element is '{existing.Type}', not '{type}'.");
+            if (path is not null)
+            {
+                var destination = ResolvePackage(root, path);
+                if (existing.PackageID != destination.PackageID)
+                {
+                    var previous = repository.GetPackageByID(existing.PackageID);
+                    existing.PackageID = destination.PackageID;
+                    if (!existing.Update()) throw new InvalidOperationException("Could not move '" + name + "': " + existing.GetLastError());
+                    previous.Elements.Refresh();
+                    destination.Elements.Refresh();
+                }
+            }
             return existing;
         }
+        var package = path is null ? root : ResolvePackage(root, path);
         var created = (EA.Element)package.Elements.AddNew(name, type);
-        created.Update();
+        if (!created.Update()) throw new InvalidOperationException("Could not create '" + name + "': " + created.GetLastError());
+        package.Elements.Refresh();
         elements[name] = created;
         return created;
     }
@@ -290,9 +318,16 @@ internal static class EaModelWriter
 
     private static EA.Diagram? FindDiagram(EA.Package package, string name)
     {
-        foreach (EA.Diagram diagram in package.Diagrams)
-            if (diagram.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) return diagram;
-        return null;
+        IEnumerable<EA.Diagram> Matches(EA.Package current)
+        {
+            foreach (EA.Diagram diagram in current.Diagrams)
+                if (diagram.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) yield return diagram;
+            foreach (var child in ChildPackages(current))
+                foreach (var diagram in Matches(child)) yield return diagram;
+        }
+        var matches = Matches(package).ToList();
+        if (matches.Count > 1) throw new InvalidDataException("Ambiguous diagram name: " + name);
+        return matches.SingleOrDefault();
     }
 
     private static void AddDiagramObject(EA.Diagram diagram, EA.Element element, DiagramBox box,

@@ -162,6 +162,7 @@ internal sealed class SchemaConverter
         if (definition["permissible_values"] is not JsonObject values) return;
         AddEnum(name, Text(definition, "description") ?? "", values.Select(x => x.Key));
         var item = _enums[TypeName(name)];
+        item.PackagePath = ReadPackagePath(definition["annotations"] as JsonObject);
         PreserveAnnotations("enum:" + item.Name, definition["annotations"]);
         foreach (var (value, node) in values)
             if (node is JsonObject details)
@@ -273,6 +274,7 @@ internal sealed class SchemaConverter
             foreach (string mixin in mixins.Select(x => x?.ToString() ?? "").Where(x => x.Length > 0))
                 if (!cls.Parents.Contains(TypeName(mixin))) cls.Parents.Add(TypeName(mixin));
         if (obj["slots"] is JsonArray slots) ParseSlotReferences(cls, slots, obj["slot_usage"] as JsonObject);
+        cls.PackagePath = ReadPackagePath(obj["annotations"] as JsonObject);
         PreserveAnnotations("class:" + cls.Name, obj["annotations"]);
         ParseDiagramAnnotations(cls, obj["annotations"] as JsonObject);
         foreach (var (propertyName, value) in obj)
@@ -300,6 +302,16 @@ internal sealed class SchemaConverter
         }
         if (obj["unique_keys"] is JsonObject uniqueKeys) MarkUniqueKeys(cls, uniqueKeys);
         return cls;
+    }
+
+    private static string? ReadPackagePath(JsonObject? annotations)
+    {
+        if (annotations is null || !annotations.ContainsKey("ea_package_path")) return null;
+        JsonNode? node = annotations["ea_package_path"];
+        if (node is JsonObject wrapped) node = wrapped["value"];
+        if (node is not JsonValue value || !value.TryGetValue<string>(out var path))
+            throw new InvalidDataException("ea_package_path must be a string (empty means the model root).");
+        return PackagePlacement.Normalize(path);
     }
 
     private static void ParseDiagramAnnotations(ImportClass cls, JsonObject? annotations)

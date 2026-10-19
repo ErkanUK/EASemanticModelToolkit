@@ -20,6 +20,7 @@ internal sealed class ImportModel
 
 internal sealed class ImportClass
 {
+    public string? PackagePath { get; set; }
     public required string Name { get; init; }
     public string Description { get; set; } = "";
     public List<string> Parents { get; } = [];
@@ -31,6 +32,7 @@ internal sealed class ImportClass
 
 internal sealed class ImportEnum
 {
+    public string? PackagePath { get; set; }
     public required string Name { get; init; }
     public string Description { get; init; } = "";
     public List<string> Values { get; } = [];

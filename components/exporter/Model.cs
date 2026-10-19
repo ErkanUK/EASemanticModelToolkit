@@ -25,6 +25,7 @@ internal readonly record struct DiagramPosition(int Left, int Top, int Right, in
 
 internal sealed class UmlClass
 {
+    public string? PackagePath { get; init; }
     public required short Id { get; init; }
     public required string Name { get; init; }
     public required string QualifiedName { get; init; }
@@ -41,6 +42,7 @@ internal sealed class UmlClass
 
 internal sealed class UmlEnum
 {
+    public string? PackagePath { get; init; }
     public required short Id { get; init; }
     public required string Name { get; init; }
     public required string Notes { get; init; }

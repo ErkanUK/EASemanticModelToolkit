@@ -26,14 +26,14 @@ internal static class EaModelReader
         model.LinkMlImports.AddRange(Deserialize<List<string>>(Tag(linkMlTags, "LinkML.imports")) ?? []);
         foreach (var item in Deserialize<Dictionary<string, string>>(Tag(linkMlTags, "LinkML.annotations")) ?? [])
             model.LinkMlAnnotations[item.Key] = item.Value;
-        ReadPackage(repository, root, root.Name, model, appearances.Elements);
+        ReadPackage(repository, root, root.Name, "", model, appearances.Elements);
         ApplyDomains(model);
         ReadDomainDiagramPositions(root, model);
         ReadRelations(repository, model, appearances.Connectors);
         return model;
     }
 
-    private static void ReadPackage(EA.Repository repository, EA.Package package, string path, ModelSnapshot model,
+    private static void ReadPackage(EA.Repository repository, EA.Package package, string path, string packagePath, ModelSnapshot model,
         IReadOnlyDictionary<int, ElementAppearance> appearances)
     {
         foreach (EA.Element element in package.Elements)
@@ -44,6 +44,7 @@ internal static class EaModelReader
                 var item = new UmlEnum
                 {
                     Id = (short)element.ElementID, Name = element.Name, Notes = CleanNotes(element.Notes),
+                    PackagePath = packagePath,
                     FillColor = appearance?.Fill ?? "#FFF7D6",
                     BorderColor = appearance?.Border ?? "#D6B656",
                     FontColor = appearance?.Font ?? "#0F172A"
@@ -64,6 +65,7 @@ internal static class EaModelReader
                 Id = (short)element.ElementID,
                 Name = element.Name,
                 QualifiedName = path + "::" + element.Name,
+                PackagePath = packagePath,
                 Notes = CleanNotes(element.Notes),
                 Version = element.Version,
                 Abstract = element.Abstract == "1",
@@ -94,7 +96,13 @@ internal static class EaModelReader
         }
 
         foreach (EA.Package child in package.Packages)
-            ReadPackage(repository, child, path + "::" + child.Name, model, appearances);
+        {
+            if (child.Name.Length == 0 || child.Name != child.Name.Trim() || child.Name is "." or ".."
+                || child.Name.IndexOfAny(['/', '\\']) >= 0 || child.Name.Any(char.IsControl))
+                throw new InvalidDataException("Package name cannot be represented by ea_package_path: " + child.Name);
+            ReadPackage(repository, child, path + "::" + child.Name,
+                packagePath.Length == 0 ? child.Name : packagePath + "/" + child.Name, model, appearances);
+        }
     }
 
     private static void ReadRelations(EA.Repository repository, ModelSnapshot model,

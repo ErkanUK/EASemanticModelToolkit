@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -7,6 +8,10 @@ internal static class LinkMlWriter
 {
     public static string Write(ModelSnapshot model)
     {
+        var duplicate = model.Classes.Select(c => c.Name).Concat(model.Enums.Select(e => e.Name))
+            .GroupBy(Identifier, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+            throw new InvalidDataException("Ambiguous LinkML class/enum key '" + duplicate.Key + "'. Names must be unique across the selected package tree.");
         var schemaName = Identifier(model.LinkMlName.Length > 0 ? model.LinkMlName : model.Name);
         var declaredRanges = model.Classes.Select(x => Identifier(x.Name))
             .Concat(model.Enums.Select(x => Identifier(x.Name)))
@@ -43,7 +48,7 @@ internal static class LinkMlWriter
             {
                 b.AppendLine("  " + Identifier(item.Name) + ":");
                 if (item.Notes.Length > 0) b.AppendLine("    description: " + Scalar(item.Notes));
-                WriteAnnotations(b, 4, Annotation(model, "enum:" + item.Name));
+                WriteAnnotations(b, 4, PackageAnnotation(model, "enum:" + item.Name, item.PackagePath));
                 b.AppendLine("    permissible_values:");
                 foreach (var value in item.Values)
                 {
@@ -60,7 +65,7 @@ internal static class LinkMlWriter
         {
             b.AppendLine("  " + Identifier(cls.Name) + ":");
             if (cls.Notes.Length > 0) b.AppendLine("    description: " + Scalar(cls.Notes));
-            WriteAnnotations(b, 4, Annotation(model, "class:" + cls.Name));
+            WriteAnnotations(b, 4, PackageAnnotation(model, "class:" + cls.Name, cls.PackagePath));
             if (!string.IsNullOrWhiteSpace(cls.Version)) b.AppendLine("    version: " + Scalar(cls.Version));
             if (cls.Abstract) b.AppendLine("    abstract: true");
             if (mixinNames.Contains(Identifier(cls.Name))) b.AppendLine("    mixin: true");
@@ -117,6 +122,17 @@ internal static class LinkMlWriter
         if (classId == relation.SourceId)
             return relation.TargetNavigable || (!relation.SourceNavigable && !relation.TargetNavigable);
         return classId == relation.TargetId && relation.SourceNavigable;
+    }
+
+    private static string PackageAnnotation(ModelSnapshot model, string key, string? path)
+    {
+        string original = Annotation(model, key);
+        if (path is null) return original;
+        // Actual EA ownership wins over any stale, previously imported metadata.
+        var annotations = original.Length > 0 ? JsonNode.Parse(original) as JsonObject
+            ?? throw new InvalidDataException("Invalid annotations for " + key) : new JsonObject();
+        annotations["ea_package_path"] = path;
+        return annotations.ToJsonString();
     }
 
     private static string Annotation(ModelSnapshot model, string key) =>
