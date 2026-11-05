@@ -48,6 +48,7 @@ internal static class EaModelWriter
         {
             var element = UpsertElement(repository, package, elements, definition.Name, "Class", definition.PackagePath);
             element.Notes = definition.Description;
+            if (definition.Version.Length > 0) element.Version = definition.Version;
             element.Update();
         }
         package.Elements.Refresh();

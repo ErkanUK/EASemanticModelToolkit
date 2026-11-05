@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace EAJsonModelImporter;
@@ -88,6 +89,7 @@ internal static class SimpleYaml
         value = value.Trim();
         if ((value.StartsWith('[') && value.EndsWith(']')) || (value.StartsWith('{') && value.EndsWith('}')))
         {
+            try { return JsonNode.Parse(value); } catch { /* try legacy single-quoted flow values */ }
             try { return JsonNode.Parse(value.Replace("'", "\"")); } catch { /* treat as text */ }
         }
         if (value.StartsWith('[') && value.EndsWith(']'))
@@ -112,7 +114,7 @@ internal static class SimpleYaml
         bool quoted = false; char quote = '\0';
         for (int i = 0; i < text.Length; i++)
         {
-            if ((text[i] is '\'' or '"') && (i == 0 || text[i - 1] != '\\'))
+            if ((text[i] is '\'' or '"') && !IsEscaped(text, i))
             { if (!quoted) { quoted = true; quote = text[i]; } else if (quote == text[i]) quoted = false; }
             if (text[i] == '#' && !quoted && (i == 0 || char.IsWhiteSpace(text[i - 1]))) { text = text[..i]; break; }
         }
@@ -124,7 +126,7 @@ internal static class SimpleYaml
         bool quoted = false; char quote = '\0';
         for (int i = 0; i < value.Length; i++)
         {
-            if (value[i] is '\'' or '"') { if (!quoted) { quoted = true; quote = value[i]; } else if (quote == value[i]) quoted = false; }
+            if ((value[i] is '\'' or '"') && !IsEscaped(value, i)) { if (!quoted) { quoted = true; quote = value[i]; } else if (quote == value[i]) quoted = false; }
             if (value[i] == ':' && !quoted && (i + 1 == value.Length || char.IsWhiteSpace(value[i + 1]))) return i;
         }
         return -1;
@@ -135,6 +137,25 @@ internal static class SimpleYaml
         && value[0] is '|' or '>'
         && (value.Length == 1 || value[1] is '-' or '+');
 
-    private static string Unquote(string value) => value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')) ? value[1..^1] : value;
+    private static string Unquote(string value)
+    {
+        if (value.Length < 2) return value;
+        // Exported double-quoted scalars use JSON-compatible YAML escaping.
+        // Decode exactly once: literal backslashes must survive repeated round trips.
+        if (value[0] == '"' && value[^1] == '"')
+            return JsonSerializer.Deserialize<string>(value)
+                ?? throw new InvalidDataException("Invalid quoted YAML scalar.");
+        if (value[0] == '\'' && value[^1] == '\'')
+            return value[1..^1].Replace("''", "'");
+        return value;
+    }
+
+    private static bool IsEscaped(string value, int index)
+    {
+        int count = 0;
+        while (index > 0 && value[--index] == '\\') count++;
+        return count % 2 != 0;
+    }
+
     private readonly record struct Line(int Indent, string Text);
 }

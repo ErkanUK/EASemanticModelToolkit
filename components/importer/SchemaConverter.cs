@@ -268,6 +268,7 @@ internal sealed class SchemaConverter
     {
         var cls = GetClass(name);
         cls.Description = Text(obj, "description") ?? description;
+        cls.Version = Text(obj, "version") ?? "";
         if (Text(obj, "is_a") is { } parent && !cls.Parents.Contains(TypeName(parent)))
             cls.Parents.Add(TypeName(parent));
         if (obj["mixins"] is JsonArray mixins)
@@ -490,7 +491,8 @@ internal sealed class SchemaConverter
         || name.Equals("properties", StringComparison.OrdinalIgnoreCase)
         || name.Equals("components", StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsClassMetadata(string name) => name.Equals("description", StringComparison.OrdinalIgnoreCase)
+    private static bool IsClassMetadata(string name) => name.Equals("version", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("description", StringComparison.OrdinalIgnoreCase)
         || name.Equals("is_a", StringComparison.OrdinalIgnoreCase)
         || name.Equals("class_uri", StringComparison.OrdinalIgnoreCase)
         || name.Equals("abstract", StringComparison.OrdinalIgnoreCase)

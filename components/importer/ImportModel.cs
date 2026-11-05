@@ -23,6 +23,7 @@ internal sealed class ImportClass
     public string? PackagePath { get; set; }
     public required string Name { get; init; }
     public string Description { get; set; } = "";
+    public string Version { get; set; } = "";
     public List<string> Parents { get; } = [];
     public List<ImportProperty> Properties { get; } = [];
     public List<string> DiagramDomains { get; } = [];

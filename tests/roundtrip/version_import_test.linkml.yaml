@@ -1,0 +1,36 @@
+id: https://example.org/ea-version-import-test
+name: ea_version_import_test
+title: EA version import test
+version: '1.0'
+prefixes:
+  linkml: https://w3id.org/linkml/
+  test: https://example.org/ea-version-import-test/
+default_prefix: test
+imports:
+  - linkml:types
+
+classes:
+  NoClassVersion:
+    description: Control class with no class version metadata and no version attribute.
+    attributes:
+      record_id:
+        range: string
+        identifier: true
+
+  ClassVersionOnly:
+    description: Class version metadata only. No version attribute is declared.
+    version: '1.0'
+    attributes:
+      record_id:
+        range: string
+        identifier: true
+
+  ExplicitVersionAttribute:
+    description: Positive control with exactly one explicitly declared version attribute.
+    attributes:
+      record_id:
+        range: string
+        identifier: true
+      version:
+        range: string
+        description: Record revision value.

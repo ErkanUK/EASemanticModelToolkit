@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../components/importer/PackagePlacement.cs" Link="PackagePlacement.cs" />
+    <Compile Include="../../components/importer/ImportModel.cs" Link="ImportModel.cs" />
+    <Compile Include="../../components/importer/SimpleYaml.cs" Link="SimpleYaml.cs" />
+    <Compile Include="../../components/importer/SchemaConverter.cs" Link="SchemaConverter.cs" />
+    <Compile Include="../../components/exporter/Model.cs" Link="Model.cs" />
+    <Compile Include="../../components/exporter/LinkMlWriter.cs" Link="LinkMlWriter.cs" />
+  </ItemGroup>
+</Project>

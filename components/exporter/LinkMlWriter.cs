@@ -180,5 +180,5 @@ internal static class LinkMlWriter
     }
     private static string Lower(string value) => value.Contains("..") ? value.Split('.')[0] : value == "*" ? "0" : value;
     private static string Upper(string value) => value.Contains("..") ? value.Split('.')[2] : value;
-    private static string Scalar(string value) => "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", "\\n") + "\"";
+    private static string Scalar(string value) => System.Text.Json.JsonSerializer.Serialize(value);
 }
